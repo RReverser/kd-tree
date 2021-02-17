@@ -1,53 +1,50 @@
-use crate::KdPoint;
 use std::cmp::Ordering;
 
-#[allow(dead_code)]
-pub fn kd_sort<P: KdPoint>(points: &mut [P])
-where
-    P::Scalar: Ord,
-{
-    kd_sort_by_key(points, P::dim(), |item, k| item.at(k))
+use crate::split_at_mid::split_at_mid_mut;
+use crate::KdPoint;
+
+// A wrapper similar to OrderedFloat but for generic types.
+// Moves any incomparable values to the end and treats them as equal.
+struct OrdHelper<T: PartialOrd>(T);
+
+impl<T: PartialOrd> Ord for OrdHelper<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.partial_cmp(&other.0).unwrap_or_else(|| {
+            // Couldn't compare values.
+            // One of them is NaN-like - find out which.
+            #[allow(clippy::eq_op)]
+            match (self.0 != self.0, other.0 != other.0) {
+                (true, false) => Ordering::Greater,
+                (false, true) => Ordering::Less,
+                _ => Ordering::Equal,
+            }
+        })
+    }
 }
 
-#[allow(dead_code)]
-pub fn kd_sort_by_ordered_float<P: KdPoint>(points: &mut [P])
-where
-    P::Scalar: num_traits::Float,
-{
-    kd_sort_by_key(points, P::dim(), |item, k| {
-        ordered_float::OrderedFloat(item.at(k))
-    })
+impl<T: PartialOrd> PartialOrd for OrdHelper<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
-#[allow(dead_code)]
-pub fn kd_sort_by_key<T, Key: Ord>(
-    items: &mut [T],
-    dim: usize,
-    kd_key: impl Fn(&T, usize) -> Key + Copy,
-) {
-    kd_sort_by(items, dim, |item1, item2, k| {
-        kd_key(item1, k).cmp(&kd_key(item2, k))
-    })
+impl<T: PartialOrd> PartialEq for OrdHelper<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
 }
 
-pub fn kd_sort_by<T>(
-    items: &mut [T],
-    dim: usize,
-    kd_compare: impl Fn(&T, &T, usize) -> Ordering + Copy,
-) {
-    fn recurse<T>(
-        items: &mut [T],
-        axis: usize,
-        dim: usize,
-        kd_compare: impl Fn(&T, &T, usize) -> Ordering + Copy,
-    ) {
+impl<T: PartialOrd> Eq for OrdHelper<T> {}
+
+pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
+    fn recurse<T: KdPoint>(items: &mut [T], mut axis: usize) {
         if items.len() >= 2 {
-            pdqselect::select_by(items, items.len() / 2, |x, y| kd_compare(x, y, axis));
-            let mid = items.len() / 2;
-            let axis = (axis + 1) % dim;
-            recurse(&mut items[..mid], axis, dim, kd_compare);
-            recurse(&mut items[mid + 1..], axis, dim, kd_compare);
+            pdqselect::select_by_key(items, items.len() / 2, |item| OrdHelper(item.at(axis)));
+            axis = (axis + 1) % T::dim();
+            let (before, _, after) = split_at_mid_mut(items);
+            recurse(before, axis);
+            recurse(after, axis);
         }
     }
-    recurse(items, 0, dim, kd_compare);
+    recurse(items, 0);
 }

@@ -1,51 +1,77 @@
+use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
+use arrayvec::{Array, ArrayVec};
+use num_traits::Signed;
+use std::ops::DerefMut;
 
-pub fn kd_nearests<'a, T: KdPoint>(
-    kdtree: &'a [T],
-    query: &impl KdPoint<Scalar = T::Scalar, Dim = T::Dim>,
-    num: usize,
-) -> Vec<ItemAndDistance<'a, T, T::Scalar>> {
-    kd_nearests_by(kdtree, query, num, |item, k| item.at(k))
+pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
+    type Item;
+
+    fn insert(&mut self, index: usize, value: Self::Item);
+    fn push(&mut self, value: Self::Item);
+    fn pop(&mut self) -> Option<Self::Item>;
+    fn capacity(&self) -> usize;
 }
 
-pub fn kd_nearests_by<'a, T, P: KdPoint>(
-    kdtree: &'a [T],
-    query: &P,
-    num: usize,
-    get: impl Fn(&T, usize) -> P::Scalar + Copy,
-) -> Vec<ItemAndDistance<'a, T, P::Scalar>> {
-    fn distance_squared<P: KdPoint, T>(
-        p1: &P,
-        p2: &T,
-        get: impl Fn(&T, usize) -> P::Scalar,
-    ) -> P::Scalar {
-        let mut squared_distance = <P::Scalar as num_traits::Zero>::zero();
-        for i in 0..P::dim() {
-            let diff = p1.at(i) - get(p2, i);
-            squared_distance += diff * diff;
+macro_rules! impl_vec_like {
+    () => {
+        fn insert(&mut self, index: usize, value: Self::Item) {
+            Self::insert(self, index, value)
         }
-        squared_distance
-    }
-    fn recurse<'a, T, Q: KdPoint>(
-        nearests: &mut Vec<ItemAndDistance<'a, T, Q::Scalar>>,
+
+        fn push(&mut self, value: Self::Item) {
+            Self::push(self, value)
+        }
+
+        fn pop(&mut self) -> Option<Self::Item> {
+            Self::pop(self)
+        }
+
+        fn capacity(&self) -> usize {
+            Self::capacity(self)
+        }
+    };
+}
+
+impl<T> VecLike for Vec<T> {
+    type Item = T;
+
+    impl_vec_like!();
+}
+
+impl<A: Array> VecLike for ArrayVec<A> {
+    type Item = A::Item;
+
+    impl_vec_like!();
+}
+
+pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+    nearests: &mut V,
+    kdtree: &'a [T],
+    query: &T,
+) {
+    fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+        nearests: &mut V,
         kdtree: &'a [T],
-        get: impl Fn(&T, usize) -> Q::Scalar + Copy,
-        query: &Q,
+        query: &T,
         axis: usize,
     ) {
-        let mid_idx = kdtree.len() / 2;
-        let item = &kdtree[mid_idx];
-        let squared_distance = distance_squared(query, item, get);
+        let (before, item, after) = split_at_mid(kdtree);
+        let item = match item {
+            Some(item) => item,
+            None => return,
+        };
+        let distance_metric = item.distance_metric(query);
         if nearests.len() < nearests.capacity()
-            || squared_distance < nearests.last().unwrap().squared_distance
+            || distance_metric < nearests.last().unwrap().distance_metric
         {
             if nearests.len() == nearests.capacity() {
                 nearests.pop();
             }
             let i = nearests
                 .binary_search_by(|item| {
-                    item.squared_distance
-                        .partial_cmp(&squared_distance)
+                    item.distance_metric
+                        .partial_cmp(&distance_metric)
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .unwrap_or_else(|i| i);
@@ -53,30 +79,23 @@ pub fn kd_nearests_by<'a, T, P: KdPoint>(
                 i,
                 ItemAndDistance {
                     item,
-                    squared_distance,
+                    distance_metric,
                 },
             );
         }
-        let mid_pos = get(item, axis);
-        let [branch1, branch2] = if query.at(axis) < mid_pos {
-            [&kdtree[..mid_idx], &kdtree[mid_idx + 1..]]
+        let mid_pos = item.at(axis);
+        let diff = query.at(axis) - mid_pos;
+        let (branch1, branch2) = if diff.is_negative() {
+            (before, after)
         } else {
-            [&kdtree[mid_idx + 1..], &kdtree[..mid_idx]]
+            (after, before)
         };
-        if !branch1.is_empty() {
-            recurse(nearests, branch1, get, query, (axis + 1) % Q::dim());
-        }
-        if !branch2.is_empty() {
-            let diff = query.at(axis) - mid_pos;
-            if diff * diff < nearests.last().unwrap().squared_distance {
-                recurse(nearests, branch2, get, query, (axis + 1) % Q::dim());
-            }
+        recurse(nearests, branch1, query, (axis + 1) % T::dim());
+        if !branch2.is_empty()
+            && T::from_distance_to_metric(diff) < nearests.last().unwrap().distance_metric
+        {
+            recurse(nearests, branch2, query, (axis + 1) % T::dim());
         }
     }
-    if num == 0 || kdtree.is_empty() {
-        return Vec::new();
-    }
-    let mut nearests = Vec::with_capacity(num);
-    recurse(&mut nearests, kdtree, get, query, 0);
-    nearests
+    recurse(nearests, kdtree, query, 0);
 }

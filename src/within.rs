@@ -1,47 +1,47 @@
 use std::cmp::Ordering;
 
-pub fn kd_within_by_cmp<'a, T>(
-    kdtree: &'a [T],
-    dim: usize,
-    compare: impl Fn(&T, usize) -> Ordering + Copy,
-) -> Vec<&'a T> {
-    fn recurse<'a, T>(
+use crate::split_at_mid::split_at_mid;
+use crate::KdPoint;
+
+pub fn kd_within_by_cmp<T: KdPoint>(
+    kdtree: &[T],
+    compare: impl Fn(T::Scalar, usize) -> Ordering + Copy,
+    final_check: impl Fn(&T) -> bool + Copy,
+) -> Vec<&T> {
+    fn recurse<'a, T: KdPoint>(
         results: &mut Vec<&'a T>,
         kdtree: &'a [T],
         axis: usize,
-        dim: usize,
-        compare: impl Fn(&T, usize) -> Ordering + Copy,
+        compare: impl Fn(T::Scalar, usize) -> Ordering + Copy,
+        final_check: impl Fn(&T) -> bool + Copy,
     ) {
-        let axis = axis % dim;
-        let (lower, item, upper) = {
-            let mid = kdtree.len() / 2;
-            (&kdtree[..mid], &kdtree[mid], &kdtree[mid + 1..])
+        let (lower, item, upper) = split_at_mid(kdtree);
+        let item = match item {
+            Some(item) => item,
+            None => return,
         };
-        match compare(item, axis) {
+        let next_axis = (axis + 1) % T::dim();
+        match compare(item.at(axis), axis) {
             Ordering::Equal => {
-                if (1..dim).all(|k| compare(item, (axis + k) % dim) == Ordering::Equal) {
+                if (1..T::dim())
+                    .map(|i| (axis + i) % T::dim())
+                    .all(|i| compare(item.at(i), i) == Ordering::Equal)
+                    && final_check(item)
+                {
                     results.push(item);
                 }
-                if !lower.is_empty() {
-                    recurse(results, lower, axis + 1, dim, compare);
-                }
-                if !upper.is_empty() {
-                    recurse(results, upper, axis + 1, dim, compare);
-                }
+                recurse(results, lower, next_axis, compare, final_check);
+                recurse(results, upper, next_axis, compare, final_check);
             }
             Ordering::Less => {
-                if !upper.is_empty() {
-                    recurse(results, upper, axis + 1, dim, compare);
-                }
+                recurse(results, upper, next_axis, compare, final_check);
             }
             Ordering::Greater => {
-                if !lower.is_empty() {
-                    recurse(results, lower, axis + 1, dim, compare);
-                }
+                recurse(results, lower, next_axis, compare, final_check);
             }
         }
     }
     let mut results = Vec::new();
-    recurse(&mut results, kdtree, 0, dim, compare);
+    recurse(&mut results, kdtree, 0, compare, final_check);
     results
 }

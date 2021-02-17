@@ -1,10 +1,11 @@
 #![cfg(test)]
-use super::*;
+#![allow(clippy::float_cmp)]
+use kd_tree::*;
 
 #[test]
 fn test_nearest() {
     let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build_by_ordered_float(vec(10000, |_| gen3d()));
+    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
     for _ in 0..100 {
         let query = gen3d();
         let found = kdtree.nearest(&query).unwrap().item;
@@ -19,18 +20,18 @@ fn test_nearest() {
 #[test]
 fn test_nearests() {
     let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build_by_ordered_float(vec(10000, |_| gen3d()));
+    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
     const NUM: usize = 5;
     for _ in 0..100 {
         let query = gen3d();
         let found = kdtree.nearests(&query, NUM);
         assert_eq!(found.len(), NUM);
         for i in 1..found.len() {
-            assert!(found[i - 1].squared_distance <= found[i].squared_distance);
+            assert!(found[i - 1].distance_metric <= found[i].distance_metric);
         }
         let count = kdtree
             .iter()
-            .filter(|p| squared_distance(p, &query) <= found[NUM - 1].squared_distance)
+            .filter(|p| squared_distance(p, &query) <= found[NUM - 1].distance_metric)
             .count();
         assert_eq!(count, NUM);
     }
@@ -39,7 +40,7 @@ fn test_nearests() {
 #[test]
 fn test_within() {
     let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build_by_ordered_float(vec(10000, |_| gen3d()));
+    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
     for _ in 0..100 {
         let mut p1 = gen3d();
         let mut p2 = gen3d();
@@ -48,7 +49,7 @@ fn test_within() {
                 std::mem::swap(&mut p1[k], &mut p2[k]);
             }
         }
-        let found = kdtree.within(&[p1, p2]);
+        let found = kdtree.within([&p1, &p2]);
         let count = kdtree
             .iter()
             .filter(|p| (0..3).all(|k| p1[k] <= p[k] && p[k] <= p2[k]))
@@ -60,7 +61,7 @@ fn test_within() {
 #[test]
 fn test_within_radius() {
     let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build_by_ordered_float(vec(10000, |_| gen3d()));
+    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
     const RADIUS: f64 = 0.1;
     for _ in 0..100 {
         let query = gen3d();
@@ -90,5 +91,6 @@ fn vec<T>(count: usize, mut f: impl FnMut(usize) -> T) -> Vec<T> {
     let mut items = Vec::with_capacity(count);
     for i in 0..count {
         items.push(f(i));
-    }    items
+    }
+    items
 }
