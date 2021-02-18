@@ -28,7 +28,7 @@ mod nearests;
 mod sort;
 mod split_at_mid;
 mod within;
-use arrayvec::ArrayVec;
+use arrayvec::{Array, ArrayVec};
 use nearests::*;
 use num_traits::Signed;
 use sort::*;
@@ -123,19 +123,6 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
         Self(points, PhantomData)
     }
 
-    /// Returns the nearest item from the input point. Returns `None` if `self.is_empty()`.
-    /// # Example
-    /// ```
-    /// let mut items: Vec<[i32; 3]> = vec![[1, 2, 3], [3, 1, 2], [2, 3, 1]];
-    /// let kdtree = kd_tree::KdTree::build(&mut items[..]);
-    /// assert_eq!(kdtree.nearest(&[3, 1, 2]).unwrap().item, &[3, 1, 2]);
-    /// ```
-    pub fn nearest(&self, query: &T) -> Option<ItemAndDistance<T>> {
-        let mut nearests = ArrayVec::<[_; 1]>::new();
-        kd_nearests(&mut nearests, self, query);
-        nearests.pop()
-    }
-
     /// Returns kNN(k nearest neighbors) from the input point.
     /// # Example
     /// ```
@@ -150,6 +137,25 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
         let mut nearests = Vec::with_capacity(num);
         kd_nearests(&mut nearests, self, query);
         nearests
+    }
+
+    /// Same as [`Self::nearests`], but returns an ArrayVec.
+    /// Will be faster for small number of points.
+    pub fn nearests_arr<'a, A: Array<Item = ItemAndDistance<'a, T>>>(&'a self, query: &T) -> ArrayVec<A> {
+        let mut nearests = ArrayVec::new();
+        kd_nearests(&mut nearests, self, query);
+        nearests
+    }
+
+    /// Returns the nearest item from the input point. Returns `None` if `self.is_empty()`.
+    /// # Example
+    /// ```
+    /// let mut items: Vec<[i32; 3]> = vec![[1, 2, 3], [3, 1, 2], [2, 3, 1]];
+    /// let kdtree = kd_tree::KdTree::build(&mut items[..]);
+    /// assert_eq!(kdtree.nearest(&[3, 1, 2]).unwrap().item, &[3, 1, 2]);
+    /// ```
+    pub fn nearest(&self, query: &T) -> Option<ItemAndDistance<T>> {
+        self.nearests_arr::<[_; 1]>(query).pop()
     }
 
     /// search points within a rectangular region
