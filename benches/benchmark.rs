@@ -249,7 +249,7 @@ struct TestItem<T> {
     coord: [T; 3],
     id: usize,
 }
-impl<T: num_traits::Signed + Copy + PartialOrd + std::iter::Sum> KdPoint for TestItem<T> {
+impl<T: num_traits::Signed + Copy + PartialOrd + Send + Sync> KdPoint for TestItem<T> {
     type Scalar = T;
     type Dim = typenum::U3;
     fn at(&self, k: usize) -> T {

@@ -24,8 +24,8 @@ pub fn kd_within_by_cmp<T: KdPoint>(
         match compare(item.at(axis), axis) {
             Ordering::Equal => {
                 if (1..T::dim())
-                    .map(|i| (axis + i) % T::dim())
-                    .all(|i| compare(item.at(i), i) == Ordering::Equal)
+                    .map(move |i| (axis + i) % T::dim())
+                    .all(move |i| compare(item.at(i), i) == Ordering::Equal)
                     && final_check(item)
                 {
                     results.push(item);

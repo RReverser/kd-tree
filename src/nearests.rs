@@ -1,3 +1,4 @@
+use crate::sort::OrdHelper;
 use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::{Array, ArrayVec};
@@ -69,10 +70,8 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 nearests.pop();
             }
             let i = nearests
-                .binary_search_by(|item| {
-                    item.distance_metric
-                        .partial_cmp(&distance_metric)
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                .binary_search_by_key(&OrdHelper(distance_metric), move |item| {
+                    OrdHelper(item.distance_metric)
                 })
                 .unwrap_or_else(|i| i);
             nearests.insert(
@@ -83,8 +82,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 },
             );
         }
-        let mid_pos = item.at(axis);
-        let diff = query.at(axis) - mid_pos;
+        let diff = query.at(axis) - item.at(axis);
         let (branch1, branch2) = if diff.is_negative() {
             (before, after)
         } else {

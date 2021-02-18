@@ -30,11 +30,10 @@ mod split_at_mid;
 mod within;
 use arrayvec::{Array, ArrayVec};
 use nearests::*;
-use num_traits::Signed;
+use num_traits::{Signed, zero};
 use sort::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
-use std::iter::Sum;
 use std::marker::PhantomData;
 use typenum::Unsigned;
 use within::*;
@@ -67,8 +66,8 @@ use within::*;
 /// ]);
 /// assert_eq!(*kdtree.nearest(&Point3D { x: 3.1, y: 0.1, z: 2.2 }).unwrap().item, Point3D { x: 3.0, y: 1.0, z: 2.0 });
 /// ```
-pub trait KdPoint {
-    type Scalar: Signed + Copy + PartialOrd + Sum;
+pub trait KdPoint: Send + Sync {
+    type Scalar: Signed + Copy + PartialOrd + Send + Sync;
     type Dim: Unsigned;
     fn dim() -> usize {
         <Self::Dim as Unsigned>::to_usize()
@@ -84,9 +83,9 @@ pub trait KdPoint {
     // By default returns a squared distance.
     fn distance_metric(&self, other: &Self) -> Self::Scalar {
         (0..Self::dim())
-            .map(|i| self.at(i) - other.at(i))
+            .map(move |i| self.at(i) - other.at(i))
             .map(|diff| diff * diff)
-            .sum()
+            .fold(zero(), |sum, x| sum + x)
     }
 }
 
@@ -141,7 +140,10 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
 
     /// Same as [`Self::nearests`], but returns an ArrayVec.
     /// Will be faster for small number of points.
-    pub fn nearests_arr<'a, A: Array<Item = ItemAndDistance<'a, T>>>(&'a self, query: &T) -> ArrayVec<A> {
+    pub fn nearests_arr<'a, A: Array<Item = ItemAndDistance<'a, T>>>(
+        &'a self,
+        query: &T,
+    ) -> ArrayVec<A> {
         let mut nearests = ArrayVec::new();
         kd_nearests(&mut nearests, self, query);
         nearests
@@ -162,7 +164,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
     pub fn within(&self, query: [&T; 2]) -> Vec<&T> {
         kd_within_by_cmp(
             self,
-            |value, k| {
+            move |value, k| {
                 if value < query[0].at(k) {
                     Ordering::Less
                 } else if value > query[1].at(k) {
@@ -180,7 +182,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
         let radius_metric = T::from_distance_to_metric(radius);
         kd_within_by_cmp(
             self,
-            |value, k| {
+            move |value, k| {
                 if value < query.at(k) - radius {
                     Ordering::Less
                 } else if value > query.at(k) + radius {
@@ -189,7 +191,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
                     Ordering::Equal
                 }
             },
-            |item| item.distance_metric(query) < radius_metric,
+            move |item| item.distance_metric(query) < radius_metric,
         )
     }
 }
@@ -198,7 +200,7 @@ macro_rules! impl_kd_points {
     ($($len:literal),*) => {
         $(
             paste::paste!{
-                impl<T: Signed + Copy + PartialOrd + Sum> KdPoint for [T; $len] {
+                impl<T: Signed + Copy + PartialOrd + Send + Sync> KdPoint for [T; $len] {
                     type Scalar = T;
                     type Dim = typenum::[<U $len>];
                     fn at(&self, i: usize) -> T { self[i] }
