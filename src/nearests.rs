@@ -12,6 +12,7 @@ pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
     fn push(&mut self, value: Self::Item);
     fn pop(&mut self) -> Option<Self::Item>;
     fn capacity(&self) -> usize;
+    fn truncate(&mut self, new_size: usize);
 }
 
 macro_rules! impl_vec_like {
@@ -30,6 +31,10 @@ macro_rules! impl_vec_like {
 
         fn capacity(&self) -> usize {
             Self::capacity(self)
+        }
+
+        fn truncate(&mut self, new_size: usize) {
+            Self::truncate(self, new_size)
         }
     };
 }
@@ -67,7 +72,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             || distance_metric < nearests.last().unwrap().distance_metric
         {
             if nearests.len() == nearests.capacity() {
-                nearests.pop();
+                nearests.truncate(nearests.len() - 1);
             }
             let i = nearests
                 .binary_search_by_key(&OrdHelper(distance_metric), move |item| {
