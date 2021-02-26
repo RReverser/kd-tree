@@ -134,7 +134,14 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
     /// ```
     pub fn nearests(&self, query: &T, num: usize) -> Vec<ItemAndDistance<T>> {
         let mut nearests = Vec::with_capacity(num);
-        kd_nearests(&mut nearests, self, query);
+        kd_nearests(&mut nearests, self, query, |_| true);
+        nearests
+    }
+
+    /// Returns kNN(k nearest neighbors) from the input point with some condition.
+    pub fn nearests_with_cond<F: Fn(&T) -> bool + Copy>(&self, query: &T, num: usize, cond: F) -> Vec<ItemAndDistance<T>> {
+        let mut nearests = Vec::with_capacity(num);
+        kd_nearests(&mut nearests, self, query, cond);
         nearests
     }
 
@@ -145,7 +152,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
         query: &T,
     ) -> ArrayVec<A> {
         let mut nearests = ArrayVec::new();
-        kd_nearests(&mut nearests, self, query);
+        kd_nearests(&mut nearests, self, query, |_| true);
         nearests
     }
 

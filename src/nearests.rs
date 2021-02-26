@@ -51,16 +51,18 @@ impl<A: Array> VecLike for ArrayVec<A> {
     impl_vec_like!();
 }
 
-pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>, F: Fn(&T) -> bool + Copy>(
     nearests: &mut V,
     kdtree: &'a [T],
     query: &T,
+    filter: F,
 ) {
-    fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+    fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>, F: Fn(&T) -> bool + Copy>(
         nearests: &mut V,
         kdtree: &'a [T],
         query: &T,
         axis: usize,
+        filter: F,
     ) {
         let (before, item, after) = split_at_mid(kdtree);
         let item = match item {
@@ -79,13 +81,15 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                     OrdHelper(item.distance_metric)
                 })
                 .unwrap_or_else(|i| i);
-            nearests.insert(
-                i,
-                ItemAndDistance {
-                    item,
-                    distance_metric,
-                },
-            );
+            if filter(item) {
+                nearests.insert(
+                    i,
+                    ItemAndDistance {
+                        item,
+                        distance_metric,
+                    },
+                );
+            }
         }
         let diff = query.at(axis) - item.at(axis);
         let (branch1, branch2) = if diff.is_negative() {
@@ -93,12 +97,12 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         } else {
             (after, before)
         };
-        recurse(nearests, branch1, query, (axis + 1) % T::dim());
+        recurse(nearests, branch1, query, (axis + 1) % T::dim(), filter);
         if !branch2.is_empty()
-            && T::from_distance_to_metric(diff) < nearests.last().unwrap().distance_metric
+            && nearests.last().map_or(true, |max| T::from_distance_to_metric(diff) < max.distance_metric)
         {
-            recurse(nearests, branch2, query, (axis + 1) % T::dim());
+            recurse(nearests, branch2, query, (axis + 1) % T::dim(), filter);
         }
     }
-    recurse(nearests, kdtree, query, 0);
+    recurse(nearests, kdtree, query, 0, filter);
 }
