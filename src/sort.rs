@@ -42,7 +42,7 @@ impl<T: PartialOrd> Eq for OrdHelper<T> {}
 pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
     fn recurse<T: KdPoint>(items: &mut [T], mut axis: usize) {
         if items.len() >= 2 {
-            pdqselect::select_by_key(items, items.len() / 2, move |item| OrdHelper(item.at(axis)));
+            items.select_nth_unstable_by_key(items.len() / 2, move |item| OrdHelper(item.at(axis)));
             axis = (axis + 1) % T::dim();
             let (before, _, after) = split_at_mid_mut(items);
             rayon::join(

@@ -14,7 +14,6 @@ edition = "2018"
 [dependencies]
 num-traits = "0.2.14"
 ordered-float = "2.0.0"
-pdqselect = "0.1.0"
 typenum = "1.12"
 paste = "1.0"
 arrayvec = "0.5.2"
