@@ -212,6 +212,17 @@ macro_rules! impl_kd_points {
                     type Dim = typenum::[<U $len>];
                     fn at(&self, i: usize) -> T { self[i] }
                 }
+
+                impl<N: Signed + PartialOrd + nalgebra::Scalar + Send + Sync + nalgebra::ComplexField<RealField = N>> KdPoint for nalgebra::Point<N, nalgebra::dimension::[<U $len>]>
+                     {
+                    type Scalar = N;
+                    type Dim = typenum::[<U $len>];
+
+                    fn at(&self, i: usize) -> Self::Scalar { self[i] }
+                    fn distance_metric(&self, other: &Self) -> Self::Scalar {
+                        nalgebra::distance_squared(self, other)
+                    }
+                }
             }
         )*
     };
