@@ -30,7 +30,7 @@ mod split_at_mid;
 mod within;
 use arrayvec::{Array, ArrayVec};
 use nearests::*;
-use num_traits::{Signed, zero};
+use num_traits::{zero, Signed};
 use sort::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
@@ -162,7 +162,9 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
 
     /// search points within a rectangular region
     pub fn within(&self, query: [&T; 2]) -> Vec<&T> {
+        let mut results = Vec::new();
         kd_within_by_cmp(
+            |item| results.push(item),
             self,
             move |value, k| {
                 if value < query[0].at(k) {
@@ -173,14 +175,21 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
                     Ordering::Equal
                 }
             },
-            |_| true,
-        )
+        );
+        results
     }
 
     /// search points within k-dimensional sphere
     pub fn within_radius(&self, query: &T, radius: T::Scalar) -> Vec<&T> {
         let radius_metric = T::from_distance_to_metric(radius);
+        let mut results = Vec::new();
+        let results_mut = &mut results;
         kd_within_by_cmp(
+            move |item| {
+                if item.distance_metric(query) < radius_metric {
+                    results_mut.push(item)
+                }
+            },
             self,
             move |value, k| {
                 if value < query.at(k) - radius {
@@ -191,8 +200,8 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
                     Ordering::Equal
                 }
             },
-            move |item| item.distance_metric(query) < radius_metric,
-        )
+        );
+        results
     }
 }
 

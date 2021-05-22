@@ -95,7 +95,9 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         };
         recurse(nearests, branch1, query, (axis + 1) % T::dim());
         if !branch2.is_empty()
-            && nearests.last().map_or(true, |max| T::from_distance_to_metric(diff) < max.distance_metric)
+            && nearests.last().map_or(true, |max| {
+                T::from_distance_to_metric(diff) < max.distance_metric
+            })
         {
             recurse(nearests, branch2, query, (axis + 1) % T::dim());
         }

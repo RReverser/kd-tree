@@ -1,5 +1,5 @@
-use std::cmp::Ordering;
 use crate::KdPoint;
+use std::cmp::Ordering;
 
 // A wrapper similar to OrderedFloat but for generic types.
 // Moves any incomparable values to the end and treats them as equal.
@@ -41,12 +41,10 @@ impl<T: PartialOrd> Eq for OrdHelper<T> {}
 pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
     fn recurse<T: KdPoint>(items: &mut [T], mut axis: usize) {
         if items.len() >= 2 {
-            let (before, _, after) = items.select_nth_unstable_by_key(items.len() / 2, move |item| OrdHelper(item.at(axis)));
+            let (before, _, after) = items
+                .select_nth_unstable_by_key(items.len() / 2, move |item| OrdHelper(item.at(axis)));
             axis = (axis + 1) % T::dim();
-            rayon::join(
-                move || recurse(before, axis),
-                move || recurse(after, axis),
-            );
+            rayon::join(move || recurse(before, axis), move || recurse(after, axis));
         }
     }
     recurse(items, 0);

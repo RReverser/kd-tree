@@ -3,17 +3,16 @@ use std::cmp::Ordering;
 use crate::split_at_mid::split_at_mid;
 use crate::KdPoint;
 
-pub fn kd_within_by_cmp<T: KdPoint>(
-    kdtree: &[T],
+pub fn kd_within_by_cmp<'a, T: KdPoint>(
+    mut on_item: impl FnMut(&'a T),
+    kdtree: &'a [T],
     compare: impl Fn(T::Scalar, usize) -> Ordering + Copy,
-    final_check: impl Fn(&T) -> bool + Copy,
-) -> Vec<&T> {
+) {
     fn recurse<'a, T: KdPoint>(
-        results: &mut Vec<&'a T>,
+        on_item: &mut impl FnMut(&'a T),
         kdtree: &'a [T],
         axis: usize,
         compare: impl Fn(T::Scalar, usize) -> Ordering + Copy,
-        final_check: impl Fn(&T) -> bool + Copy,
     ) {
         let (lower, item, upper) = split_at_mid(kdtree);
         let item = match item {
@@ -26,22 +25,19 @@ pub fn kd_within_by_cmp<T: KdPoint>(
                 if (1..T::dim())
                     .map(move |i| (axis + i) % T::dim())
                     .all(move |i| compare(item.at(i), i) == Ordering::Equal)
-                    && final_check(item)
                 {
-                    results.push(item);
+                    on_item(item);
                 }
-                recurse(results, lower, next_axis, compare, final_check);
-                recurse(results, upper, next_axis, compare, final_check);
+                recurse(on_item, lower, next_axis, compare);
+                recurse(on_item, upper, next_axis, compare);
             }
             Ordering::Less => {
-                recurse(results, upper, next_axis, compare, final_check);
+                recurse(on_item, upper, next_axis, compare);
             }
             Ordering::Greater => {
-                recurse(results, lower, next_axis, compare, final_check);
+                recurse(on_item, lower, next_axis, compare);
             }
         }
     }
-    let mut results = Vec::new();
-    recurse(&mut results, kdtree, 0, compare, final_check);
-    results
+    recurse(&mut on_item, kdtree, 0, compare);
 }

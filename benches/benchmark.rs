@@ -141,7 +141,12 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
         kdtree
     };
     let kd_tree = KdTree::build(points.clone());
-    let kd_tree_nalgebra = KdTree::build(points.iter().map(|point| nalgebra::Point3::from(point.coord)).collect::<Vec<_>>());
+    let kd_tree_nalgebra = KdTree::build(
+        points
+            .iter()
+            .map(|point| nalgebra::Point3::from(point.coord))
+            .collect::<Vec<_>>(),
+    );
     for k in &[1, 5, 10, 20, 50] {
         group.bench_with_input(BenchmarkId::new("kd_tree", k), k, |b, k| {
             b.iter(|| {
