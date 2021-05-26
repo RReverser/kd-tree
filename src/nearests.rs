@@ -67,6 +67,17 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             Some(item) => item,
             None => return,
         };
+        let diff = query.at(axis) - item.at(axis);
+        let (branch1, branch2) = if diff.is_negative() {
+            (before, after)
+        } else {
+            (after, before)
+        };
+        let mut next_axis = axis + 1;
+        if next_axis == T::dim() {
+            next_axis = 0;
+        }
+        recurse(nearests, branch1, query, next_axis);
         let distance_metric = item.distance_metric(query);
         if nearests.len() < nearests.capacity()
             || distance_metric < nearests.last().unwrap().distance_metric
@@ -87,19 +98,12 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 },
             );
         }
-        let diff = query.at(axis) - item.at(axis);
-        let (branch1, branch2) = if diff.is_negative() {
-            (before, after)
-        } else {
-            (after, before)
-        };
-        recurse(nearests, branch1, query, (axis + 1) % T::dim());
         if !branch2.is_empty()
             && nearests.last().map_or(true, |max| {
                 T::from_distance_to_metric(diff) < max.distance_metric
             })
         {
-            recurse(nearests, branch2, query, (axis + 1) % T::dim());
+            recurse(nearests, branch2, query, next_axis);
         }
     }
     recurse(nearests, kdtree, query, 0);
