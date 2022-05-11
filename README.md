@@ -50,7 +50,7 @@ struct Item {
 // implement `KdPoint` for your item type.
 impl KdPoint for Item {
     type Scalar = f64;
-    type Dim = typenum::U2; // 2 dimensional tree.
+    const DIM: usize = 2; // 2 dimensional tree.
     fn at(&self, k: usize) -> f64 { self.point[k] }
 }
 

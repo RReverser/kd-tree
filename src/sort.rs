@@ -43,7 +43,7 @@ pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
         if items.len() >= 2 {
             let (before, _, after) = items
                 .select_nth_unstable_by_key(items.len() / 2, move |item| OrdHelper(item.at(axis)));
-            axis = (axis + 1) % T::dim();
+            axis = (axis + 1) % T::DIM;
             rayon::join(move || recurse(before, axis), move || recurse(after, axis));
         }
     }

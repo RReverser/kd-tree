@@ -1,7 +1,7 @@
 use crate::sort::OrdHelper;
 use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
-use arrayvec::{Array, ArrayVec};
+use arrayvec::ArrayVec;
 use num_traits::Signed;
 use std::ops::DerefMut;
 
@@ -45,8 +45,8 @@ impl<T> VecLike for Vec<T> {
     impl_vec_like!();
 }
 
-impl<A: Array> VecLike for ArrayVec<A> {
-    type Item = A::Item;
+impl<T, const N: usize> VecLike for ArrayVec<T, N> {
+    type Item = T;
 
     impl_vec_like!();
 }
@@ -74,7 +74,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             (after, before)
         };
         let mut next_axis = axis + 1;
-        if next_axis == T::dim() {
+        if next_axis == T::DIM {
             next_axis = 0;
         }
         recurse(nearests, branch1, query, next_axis);

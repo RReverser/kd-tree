@@ -178,35 +178,35 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("kd_tree with arr", 1), |b| {
         b.iter(|| {
             let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<[_; 1]>(&kd_tree[i]);
+            let nearests = kd_tree.nearests_arr::<1>(&kd_tree[i]);
             assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
         });
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 5), |b| {
         b.iter(|| {
             let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<[_; 5]>(&kd_tree[i]);
+            let nearests = kd_tree.nearests_arr::<5>(&kd_tree[i]);
             assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
         });
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 10), |b| {
         b.iter(|| {
             let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<[_; 10]>(&kd_tree[i]);
+            let nearests = kd_tree.nearests_arr::<10>(&kd_tree[i]);
             assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
         });
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 20), |b| {
         b.iter(|| {
             let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<[_; 20]>(&kd_tree[i]);
+            let nearests = kd_tree.nearests_arr::<20>(&kd_tree[i]);
             assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
         });
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 50), |b| {
         b.iter(|| {
             let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<[_; 50]>(&kd_tree[i]);
+            let nearests = kd_tree.nearests_arr::<50>(&kd_tree[i]);
             assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
         });
     });
@@ -264,7 +264,7 @@ struct TestItem<T> {
 }
 impl<T: num_traits::Signed + Copy + PartialOrd + Send + Sync> KdPoint for TestItem<T> {
     type Scalar = T;
-    type Dim = typenum::U3;
+    const DIM: usize = 3;
     fn at(&self, k: usize) -> T {
         self.coord[k]
     }

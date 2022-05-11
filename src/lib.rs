@@ -28,14 +28,13 @@ mod nearests;
 mod sort;
 mod split_at_mid;
 mod within;
-use arrayvec::{Array, ArrayVec};
+use arrayvec::ArrayVec;
 use nearests::*;
 use num_traits::{zero, Signed};
 use sort::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
 use std::marker::PhantomData;
-use typenum::Unsigned;
 use within::*;
 
 /// A trait to represent k-dimensional point.
@@ -50,7 +49,7 @@ use within::*;
 /// }
 /// impl kd_tree::KdPoint for Point3D {
 ///     type Scalar = f64;
-///     type Dim = typenum::U3;
+///     const DIM: usize = 3;
 ///     fn at(&self, k: usize) -> f64 {
 ///         match k {
 ///             0 => self.x,
@@ -68,10 +67,7 @@ use within::*;
 /// ```
 pub trait KdPoint: Send + Sync {
     type Scalar: Signed + Copy + PartialOrd + Send + Sync;
-    type Dim: Unsigned;
-    fn dim() -> usize {
-        <Self::Dim as Unsigned>::to_usize()
-    }
+    const DIM: usize;
     fn at(&self, i: usize) -> Self::Scalar;
     // Conversion from actual distance to the metric used for comparisons.
     // By default a squared distance.
@@ -82,7 +78,7 @@ pub trait KdPoint: Send + Sync {
     // as it preserves the order.
     // By default returns a squared distance.
     fn distance_metric(&self, other: &Self) -> Self::Scalar {
-        (0..Self::dim())
+        (0..Self::DIM)
             .map(move |i| self.at(i) - other.at(i))
             .map(|diff| diff * diff)
             .fold(zero(), |sum, x| sum + x)
@@ -140,10 +136,10 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
 
     /// Same as [`Self::nearests`], but returns an ArrayVec.
     /// Will be faster for small number of points.
-    pub fn nearests_arr<'a, A: Array<Item = ItemAndDistance<'a, T>>>(
+    pub fn nearests_arr<'a, const N: usize>(
         &'a self,
         query: &T,
-    ) -> ArrayVec<A> {
+    ) -> ArrayVec<ItemAndDistance<'a, T>, N> {
         let mut nearests = ArrayVec::new();
         kd_nearests(&mut nearests, self, query);
         nearests
@@ -157,7 +153,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
     /// assert_eq!(kdtree.nearest(&[3, 1, 2]).unwrap().item, &[3, 1, 2]);
     /// ```
     pub fn nearest(&self, query: &T) -> Option<ItemAndDistance<T>> {
-        self.nearests_arr::<[_; 1]>(query).pop()
+        self.nearests_arr::<1>(query).pop()
     }
 
     /// search points within a rectangular region
@@ -205,28 +201,32 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
     }
 }
 
-macro_rules! impl_kd_points {
-    ($($len:literal),*) => {
-        $(
-            paste::paste!{
-                impl<T: Signed + Copy + PartialOrd + Send + Sync> KdPoint for [T; $len] {
-                    type Scalar = T;
-                    type Dim = typenum::[<U $len>];
-                    fn at(&self, i: usize) -> T { self[i] }
-                }
-
-                impl<N: Signed + PartialOrd + nalgebra::Scalar + Send + Sync + nalgebra::ComplexField<RealField = N>> KdPoint for nalgebra::Point<N, nalgebra::dimension::[<U $len>]>
-                     {
-                    type Scalar = N;
-                    type Dim = typenum::[<U $len>];
-
-                    fn at(&self, i: usize) -> Self::Scalar { self[i] }
-                    fn distance_metric(&self, other: &Self) -> Self::Scalar {
-                        nalgebra::distance_squared(self, other)
-                    }
-                }
-            }
-        )*
-    };
+impl<T: Signed + Copy + PartialOrd + Send + Sync, const D: usize> KdPoint for [T; D] {
+    type Scalar = T;
+    const DIM: usize = D;
+    fn at(&self, i: usize) -> T {
+        self[i]
+    }
 }
-impl_kd_points!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+
+impl<
+        N: Signed
+            + PartialOrd
+            + nalgebra::Scalar
+            + Copy
+            + Send
+            + Sync
+            + nalgebra::ComplexField<RealField = N>,
+        const D: usize,
+    > KdPoint for nalgebra::Point<N, D>
+{
+    type Scalar = N;
+    const DIM: usize = D;
+
+    fn at(&self, i: usize) -> Self::Scalar {
+        self[i]
+    }
+    fn distance_metric(&self, other: &Self) -> Self::Scalar {
+        nalgebra::distance_squared(self, other)
+    }
+}

@@ -19,11 +19,11 @@ pub fn kd_within_by_cmp<'a, T: KdPoint>(
             Some(item) => item,
             None => return,
         };
-        let next_axis = (axis + 1) % T::dim();
+        let next_axis = (axis + 1) % T::DIM;
         match compare(item.at(axis), axis) {
             Ordering::Equal => {
-                if (1..T::dim())
-                    .map(move |i| (axis + i) % T::dim())
+                if (1..T::DIM)
+                    .map(move |i| (axis + i) % T::DIM)
                     .all(move |i| compare(item.at(i), i) == Ordering::Equal)
                 {
                     on_item(item);
