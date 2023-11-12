@@ -76,11 +76,12 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         recurse(nearests, before, query, next_axis);
         let distance_metric = item.distance_metric(query);
         if nearests.len() < nearests.capacity()
-            || distance_metric < nearests.last().unwrap().distance_metric
+            || nearests.last().map_or(
+                /* unreachable */ false,
+                |max| distance_metric < max.distance_metric,
+            )
         {
-            if nearests.len() == nearests.capacity() {
-                nearests.truncate(nearests.len() - 1);
-            }
+            nearests.truncate(nearests.capacity() - 1);
             let i = nearests
                 .binary_search_by_key(&OrdHelper(distance_metric), move |item| {
                     OrdHelper(item.distance_metric)
