@@ -60,22 +60,20 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         query: &T,
         axis: usize,
     ) {
-        let (before, item, after) = split_at_mid(kdtree);
+        let (mut before, item, mut after) = split_at_mid(kdtree);
         let item = match item {
             Some(item) => item,
             None => return,
         };
         let diff = query.at(axis) - item.at(axis);
-        let (branch1, branch2) = if diff.is_negative() {
-            (before, after)
-        } else {
-            (after, before)
-        };
+        if diff.is_positive() {
+            std::mem::swap(&mut before, &mut after);
+        }
         let mut next_axis = axis + 1;
         if next_axis == T::DIM {
             next_axis = 0;
         }
-        recurse(nearests, branch1, query, next_axis);
+        recurse(nearests, before, query, next_axis);
         let distance_metric = item.distance_metric(query);
         if nearests.len() < nearests.capacity()
             || distance_metric < nearests.last().unwrap().distance_metric
@@ -96,12 +94,12 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 },
             );
         }
-        if !branch2.is_empty()
+        if !after.is_empty()
             && nearests.last().map_or(true, |max| {
                 T::from_distance_to_metric(diff) < max.distance_metric
             })
         {
-            recurse(nearests, branch2, query, next_axis);
+            recurse(nearests, after, query, next_axis);
         }
     }
     recurse(nearests, kdtree, query, 0);
