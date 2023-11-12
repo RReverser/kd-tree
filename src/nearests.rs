@@ -17,6 +17,8 @@ pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
 
 macro_rules! impl_vec_like {
     () => {
+        type Item = T;
+
         fn insert(&mut self, index: usize, value: Self::Item) {
             Self::insert(self, index, value)
         }
@@ -40,14 +42,10 @@ macro_rules! impl_vec_like {
 }
 
 impl<T> VecLike for Vec<T> {
-    type Item = T;
-
     impl_vec_like!();
 }
 
 impl<T, const N: usize> VecLike for ArrayVec<T, N> {
-    type Item = T;
-
     impl_vec_like!();
 }
 
