@@ -82,11 +82,10 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             )
         {
             nearests.truncate(nearests.capacity() - 1);
-            let i = nearests
+            let (Ok(i) | Err(i)) = nearests
                 .binary_search_by_key(&OrdHelper(distance_metric), move |item| {
                     OrdHelper(item.distance_metric)
-                })
-                .unwrap_or_else(|i| i);
+                });
             nearests.insert(
                 i,
                 ItemAndDistance {
