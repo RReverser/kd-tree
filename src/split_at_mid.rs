@@ -1,13 +1,15 @@
 pub fn split_at_mid<T>(items: &[T]) -> (&[T], Option<&T>, &[T]) {
-    if items.is_empty() {
+    let Some((item, rest)) = items.split_first() else {
         return (&[], None, &[]);
-    }
+    };
     let index = items.len() / 2;
     unsafe {
         (
-            items.get_unchecked(..index),
-            Some(items.get_unchecked(index)),
-            items.get_unchecked(index + 1..),
+            // before part for Eyztiner layout
+            rest.get_unchecked(..index),
+            Some(item),
+            // after part for Eyztiner layout
+            rest.get_unchecked(index..),
         )
     }
 }
