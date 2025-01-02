@@ -16,7 +16,7 @@ num-traits = "0.2.15"
 ordered-float = "4.1.1"
 arrayvec = "0.7.2"
 rayon = "1.5.2"
-nalgebra = "0.32.3"
+nalgebra = "0.33.2"
 
 [dev-dependencies]
 rand = "0.8.5"
