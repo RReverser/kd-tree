@@ -9,8 +9,6 @@ pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
     type Item;
 
     fn insert(&mut self, index: usize, value: Self::Item);
-    fn push(&mut self, value: Self::Item);
-    fn pop(&mut self) -> Option<Self::Item>;
     fn capacity(&self) -> usize;
     fn truncate(&mut self, new_size: usize);
 }
@@ -21,14 +19,6 @@ macro_rules! impl_vec_like {
 
         fn insert(&mut self, index: usize, value: Self::Item) {
             Self::insert(self, index, value)
-        }
-
-        fn push(&mut self, value: Self::Item) {
-            Self::push(self, value)
-        }
-
-        fn pop(&mut self) -> Option<Self::Item> {
-            Self::pop(self)
         }
 
         fn capacity(&self) -> usize {
