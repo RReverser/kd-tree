@@ -40,8 +40,9 @@ fn bench_kdtree_construction(c: &mut Criterion) {
                 |points| {
                     let mut kdtree = kdtree::KdTree::new(3);
                     for p in &points {
-                        kdtree.add(&p.coord, p.id).unwrap();
+                        kdtree.add(p.coord, p.id).unwrap();
                     }
+                    kdtree
                 },
             )
         });
@@ -58,13 +59,10 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             log10n,
             |b, log10n| {
                 let kdtree = KdTree::build(gen_points3d(10usize.pow(*log10n)));
-                b.iter(|| {
-                    let i = rng.gen::<usize>() % kdtree.len();
-                    assert_eq!(
-                        kdtree.nearest(&kdtree[i]).unwrap().item.coord,
-                        kdtree[i].coord
-                    );
-                });
+                b.iter_with_setup(
+                    || rng.gen::<usize>() % kdtree.len(),
+                    |i| kdtree.nearest(&kdtree[i]).unwrap(),
+                );
             },
         );
         group.bench_with_input(
@@ -72,13 +70,10 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             log10n,
             |b, log10n| {
                 let kdtree = KdTree::build(gen_points3i(10usize.pow(*log10n)));
-                b.iter(|| {
-                    let i = rng.gen::<usize>() % kdtree.len();
-                    assert_eq!(
-                        kdtree.nearest(&kdtree[i]).unwrap().item.coord,
-                        kdtree[i].coord
-                    );
-                });
+                b.iter_with_setup(
+                    || rng.gen::<usize>() % kdtree.len(),
+                    |i| kdtree.nearest(&kdtree[i]).unwrap(),
+                );
             },
         );
         group.bench_with_input(
@@ -86,13 +81,10 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             log10n,
             |b, log10n| {
                 let kdtree = KdTree::build(gen_points3d(10usize.pow(*log10n)));
-                b.iter(|| {
-                    let i = rng.gen::<usize>() % kdtree.len();
-                    assert_eq!(
-                        kdtree.nearests(&kdtree[i], 1)[0].item.coord,
-                        kdtree[i].coord
-                    );
-                });
+                b.iter_with_setup(
+                    || rng.gen::<usize>() % kdtree.len(),
+                    |i| kdtree.nearests(&kdtree[i], 1),
+                );
             },
         );
         group.bench_with_input(
@@ -101,10 +93,10 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             |b, log10n| {
                 let mut points = gen_points3d(10usize.pow(*log10n));
                 let kdtree = fux_kdtree::kdtree::Kdtree::new(&mut points);
-                b.iter(|| {
-                    let i = rng.gen::<usize>() % points.len();
-                    assert_eq!(kdtree.nearest_search(&points[i]).coord, points[i].coord);
-                });
+                b.iter_with_setup(
+                    || rng.gen::<usize>() % points.len(),
+                    |i| kdtree.nearest_search(&points[i]),
+                );
             },
         );
         group.bench_with_input(BenchmarkId::new("kdtree", log10n), log10n, |b, log10n| {
@@ -113,16 +105,14 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             for p in &points {
                 kdtree.add(&p.coord, p.id).unwrap();
             }
-            b.iter(|| {
-                let i = rng.gen::<usize>() % points.len();
-                assert_eq!(
+            b.iter_with_setup(
+                || rng.gen::<usize>() % points.len(),
+                |i| {
                     kdtree
                         .nearest(&points[i].coord, 1, &kdtree::distance::squared_euclidean)
-                        .unwrap()[0]
-                        .1,
-                    &points[i].id
-                );
-            })
+                        .unwrap()
+                },
+            )
         });
     }
 }
@@ -149,66 +139,70 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     );
     for k in &[1, 5, 10, 20, 50] {
         group.bench_with_input(BenchmarkId::new("kd_tree", k), k, |b, k| {
-            b.iter(|| {
-                let i = rng.gen::<usize>() % kd_tree.len();
-                let nearests = kd_tree.nearests(&kd_tree[i], *k);
-                assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-            });
+            b.iter_with_setup(
+                || rng.gen::<usize>() % N,
+                |i| {
+                    let nearests = kd_tree.nearests(&kd_tree[i], *k);
+                    assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
+                },
+            );
         });
         group.bench_with_input(BenchmarkId::new("kd_tree_nalgebra", k), k, |b, k| {
-            b.iter(|| {
-                let i = rng.gen::<usize>() % kd_tree_nalgebra.len();
-                let nearests = kd_tree_nalgebra.nearests(&kd_tree_nalgebra[i], *k);
-                assert_eq!(*nearests[0].item, kd_tree_nalgebra[i]);
-            });
+            b.iter_with_setup(
+                || rng.gen::<usize>() % N,
+                |i| {
+                    let nearests = kd_tree_nalgebra.nearests(&kd_tree_nalgebra[i], *k);
+                    assert_eq!(*nearests[0].item, kd_tree_nalgebra[i]);
+                },
+            );
         });
         group.bench_with_input(BenchmarkId::new("kdtree", k), k, |b, k| {
-            b.iter(|| {
-                let i = rng.gen::<usize>() % N;
-                assert_eq!(
-                    kdtree
-                        .nearest(&points[i].coord, *k, &kdtree::distance::squared_euclidean)
-                        .unwrap()[0]
-                        .1,
-                    &points[i].id
-                );
-            })
+            b.iter_with_setup(
+                || rng.gen::<usize>() % N,
+                |i| {
+                    assert_eq!(
+                        kdtree
+                            .nearest(&points[i].coord, *k, &kdtree::distance::squared_euclidean)
+                            .unwrap()[0]
+                            .1,
+                        &points[i].id
+                    );
+                },
+            )
         });
     }
     group.bench_function(BenchmarkId::new("kd_tree with arr", 1), |b| {
-        b.iter(|| {
-            let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<1>(&kd_tree[i]);
-            assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-        });
+        b.iter_with_setup(
+            || rng.gen::<usize>() % kd_tree.len(),
+            |i| kd_tree.nearests_arr::<1>(&kd_tree[i]),
+        );
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 5), |b| {
-        b.iter(|| {
-            let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<5>(&kd_tree[i]);
-            assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-        });
+        b.iter_with_setup(
+            || rng.gen::<usize>() % kd_tree.len(),
+            |i| kd_tree.nearests_arr::<5>(&kd_tree[i]),
+        );
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 10), |b| {
-        b.iter(|| {
-            let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<10>(&kd_tree[i]);
-            assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-        });
+        b.iter_with_setup(
+            || rng.gen::<usize>() % kd_tree.len(),
+            |i| kd_tree.nearests_arr::<10>(&kd_tree[i]),
+        );
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 20), |b| {
-        b.iter(|| {
-            let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<20>(&kd_tree[i]);
-            assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-        });
+        b.iter_with_setup(
+            || rng.gen::<usize>() % kd_tree.len(),
+            |i| kd_tree.nearests_arr::<20>(&kd_tree[i]),
+        );
     });
     group.bench_function(BenchmarkId::new("kd_tree with arr", 50), |b| {
-        b.iter(|| {
-            let i = rng.gen::<usize>() % kd_tree.len();
-            let nearests = kd_tree.nearests_arr::<50>(&kd_tree[i]);
-            assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-        });
+        b.iter_with_setup(
+            || rng.gen::<usize>() % kd_tree.len(),
+            |i| {
+                let nearests = kd_tree.nearests_arr::<50>(&kd_tree[i]);
+                assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
+            },
+        );
     });
 }
 
@@ -228,22 +222,24 @@ fn bench_kdtree_within_radius(c: &mut Criterion) {
     let kd_tree = KdTree::build(points.clone());
     for radius in &[0.05, 0.1, 0.2, 0.4] {
         group.bench_with_input(BenchmarkId::new("kd_tree", radius), radius, |b, radius| {
-            b.iter(|| {
-                let i = rng.gen::<usize>() % kd_tree.len();
-                let _neighbors = kd_tree.within_radius(&kd_tree[i], *radius);
-            });
+            b.iter_with_setup(
+                || rng.gen::<usize>() % N,
+                |i| kd_tree.within_radius(&kd_tree[i], *radius),
+            );
         });
         group.bench_with_input(BenchmarkId::new("kdtree", radius), radius, |b, radius| {
-            b.iter(|| {
-                let i = rng.gen::<usize>() % N;
-                let _neighbors = kdtree
-                    .within(
-                        &points[i].coord,
-                        *radius * *radius,
-                        &kdtree::distance::squared_euclidean,
-                    )
-                    .unwrap();
-            })
+            b.iter_with_setup(
+                || rng.gen::<usize>() % N,
+                |i| {
+                    kdtree
+                        .within(
+                            &points[i].coord,
+                            *radius * *radius,
+                            &kdtree::distance::squared_euclidean,
+                        )
+                        .unwrap()
+                },
+            )
         });
     }
 }
