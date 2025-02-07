@@ -1,4 +1,3 @@
-use crate::sort::OrdHelper;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
@@ -72,10 +71,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             )
         {
             nearests.truncate(nearests.capacity() - 1);
-            let (Ok(i) | Err(i)) = nearests
-                .binary_search_by_key(&OrdHelper(distance_metric), move |item| {
-                    OrdHelper(item.distance_metric)
-                });
+            let i = nearests.partition_point(|item| item.distance_metric < distance_metric);
             nearests.insert(
                 i,
                 ItemAndDistance {
