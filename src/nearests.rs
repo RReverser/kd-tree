@@ -1,5 +1,4 @@
 use crate::sort::OrdHelper;
-use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
@@ -47,23 +46,24 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
     fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         nearests: &mut V,
         kdtree: &'a [T],
+        k: usize,
         query: &T,
-        axis: usize,
+        mut axis: usize,
     ) {
-        let (mut before, item, mut after) = split_at_mid(kdtree);
-        let item = match item {
+        let item = match kdtree.get(k) {
             Some(item) => item,
             None => return,
         };
+        let (mut before, mut after) = (2 * k + 1, 2 * k + 2);
         let diff = query.at(axis) - item.at(axis);
         if diff.is_positive() {
             std::mem::swap(&mut before, &mut after);
         }
-        let mut next_axis = axis + 1;
-        if next_axis == T::DIM {
-            next_axis = 0;
+        axis += 1;
+        if axis == T::DIM {
+            axis = 0;
         }
-        recurse(nearests, before, query, next_axis);
+        recurse(nearests, kdtree, before, query, axis);
         let distance_metric = item.distance_metric(query);
         if nearests.len() < nearests.capacity()
             || nearests.last().map_or(
@@ -84,13 +84,13 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 },
             );
         }
-        if !after.is_empty()
+        if after < kdtree.len()
             && nearests.last().map_or(true, |max| {
                 T::from_distance_to_metric(diff) < max.distance_metric
             })
         {
-            recurse(nearests, after, query, next_axis);
+            recurse(nearests, kdtree, after, query, axis);
         }
     }
-    recurse(nearests, kdtree, query, 0);
+    recurse(nearests, kdtree, 0, query, 0);
 }

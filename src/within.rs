@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 
-use crate::split_at_mid::split_at_mid;
 use crate::KdPoint;
 
 pub fn kd_within_by_cmp<'a, T: KdPoint>(
@@ -12,10 +11,10 @@ pub fn kd_within_by_cmp<'a, T: KdPoint>(
         on_item: &mut impl FnMut(&'a T),
         kdtree: &'a [T],
         axis: usize,
+        k: usize,
         compare: impl Fn(T::Scalar, usize) -> Ordering + Copy,
     ) {
-        let (lower, item, upper) = split_at_mid(kdtree);
-        let item = match item {
+        let item = match kdtree.get(k) {
             Some(item) => item,
             None => return,
         };
@@ -28,16 +27,16 @@ pub fn kd_within_by_cmp<'a, T: KdPoint>(
                 {
                     on_item(item);
                 }
-                recurse(on_item, lower, next_axis, compare);
-                recurse(on_item, upper, next_axis, compare);
+                recurse(on_item, kdtree, next_axis, 2 * k + 1, compare);
+                recurse(on_item, kdtree, next_axis, 2 * k + 2, compare);
             }
             Ordering::Less => {
-                recurse(on_item, upper, next_axis, compare);
+                recurse(on_item, kdtree, next_axis, 2 * k + 2, compare);
             }
             Ordering::Greater => {
-                recurse(on_item, lower, next_axis, compare);
+                recurse(on_item, kdtree, next_axis, 2 * k + 1, compare);
             }
         }
     }
-    recurse(&mut on_item, kdtree, 0, compare);
+    recurse(&mut on_item, kdtree, 0, 0, compare);
 }

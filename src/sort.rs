@@ -1,5 +1,7 @@
 use crate::KdPoint;
+use std::cell::UnsafeCell;
 use std::cmp::Ordering;
+use std::mem::MaybeUninit;
 
 // A wrapper similar to OrderedFloat but for generic types.
 // Moves any incomparable values to the end and treats them as equal.
@@ -38,15 +40,63 @@ impl<T: PartialOrd> PartialEq for OrdHelper<T> {
 
 impl<T: PartialOrd> Eq for OrdHelper<T> {}
 
-pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
-    fn recurse<T: KdPoint>(items: &mut [T], mut axis: usize) {
-        if items.len() >= 2 {
-            let index = items.len() / 2;
-            let (before, _, after) =
-                items.select_nth_unstable_by_key(index, move |item| OrdHelper(item.at(axis)));
-            axis = (axis + 1) % T::DIM;
-            rayon::join(move || recurse(before, axis), move || recurse(after, axis));
-        }
+#[repr(transparent)]
+struct YoloCell<T> {
+    value: UnsafeCell<MaybeUninit<T>>,
+}
+
+// TODO: replace implementation with SyncUnsafeCell once it stabilizes.
+unsafe impl<T: Sync> Sync for YoloCell<T> {}
+
+impl<T> YoloCell<T> {
+    fn get(&self) -> *mut T {
+        self.value.get().cast()
     }
-    recurse(items, 0);
+}
+
+pub fn kd_sort_by<T: KdPoint>(points: &mut [T]) {
+    fn build_eytzinger_kdtree<T: KdPoint>(
+        output: &[YoloCell<T>],
+        points: &mut [T],
+        mut k: usize,    // Logical Eytzinger index (root starts at 1)
+        mut axis: usize, // Depth in the tree, to choose the axis
+    ) {
+        let Some(output_point) = output.get(k) else {
+            return;
+        };
+
+        if points.is_empty() {
+            return;
+        }
+
+        let (left, median, right) =
+            points.select_nth_unstable_by_key(points.len() / 2, |p| OrdHelper(p.at(axis)));
+
+        unsafe {
+            // SAFETY: in Eytzingerization, each k points to a unique item that no other thread should override.
+            // As long as we mutably access only the item pointed to by k, we are safe.
+            output_point.get().copy_from_nonoverlapping(median, 1);
+        }
+
+        k *= 2;
+
+        axis += 1;
+        if axis == T::DIM {
+            axis = 0;
+        }
+
+        rayon::join(
+            move || build_eytzinger_kdtree(output, left, k + 1, axis),
+            move || build_eytzinger_kdtree(output, right, k + 2, axis),
+        );
+    }
+
+    let mut output = Vec::<YoloCell<T>>::with_capacity(points.len());
+    unsafe {
+        output.set_len(output.capacity());
+    }
+    build_eytzinger_kdtree(&output, points, 0, 0);
+    unsafe {
+        std::ptr::copy_nonoverlapping(output.as_ptr().cast(), points.as_mut_ptr(), points.len());
+    }
 }
