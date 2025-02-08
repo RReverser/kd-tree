@@ -65,14 +65,9 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             recurse(nearests, kdtree, before, query);
         }
         let distance_metric = item.distance_metric(query);
-        if nearests.len() < nearests.capacity()
-            || nearests.last().map_or(
-                /* unreachable */ false,
-                |max| distance_metric < max.distance_metric,
-            )
-        {
+        let i = nearests.partition_point(|item| item.distance_metric < distance_metric);
+        if i < nearests.capacity() {
             nearests.truncate(nearests.capacity() - 1);
-            let i = nearests.partition_point(|item| item.distance_metric < distance_metric);
             nearests.insert(
                 i,
                 ItemAndDistance {
