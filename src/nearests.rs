@@ -1,6 +1,7 @@
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
+use prefetch::prefetch::{prefetch, Data, High, Read};
 use std::ops::DerefMut;
 
 pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
@@ -45,24 +46,24 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
     fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         nearests: &mut V,
         kdtree: &'a [T],
-        k: usize,
+        mut k: usize,
         query: &T,
-        mut axis: usize,
     ) {
         let item = match kdtree.get(k) {
             Some(item) => item,
             None => return,
         };
-        let (mut before, mut after) = (2 * k + 1, 2 * k + 2);
+        let axis = (k + 1).ilog2() as usize % T::DIM;
+        k = 2 * k + 1;
+        let (mut before, mut after) = (k, k + 1);
         let diff = query.at(axis) - item.at(axis);
-        if diff.is_positive() {
-            std::mem::swap(&mut before, &mut after);
+        if let Some(next_start) = kdtree.get(k) {
+            prefetch::<Read, High, Data, T>(next_start);
+            if diff.is_positive() {
+                std::mem::swap(&mut before, &mut after);
+            }
+            recurse(nearests, kdtree, before, query);
         }
-        axis += 1;
-        if axis == T::DIM {
-            axis = 0;
-        }
-        recurse(nearests, kdtree, before, query, axis);
         let distance_metric = item.distance_metric(query);
         if nearests.len() < nearests.capacity()
             || nearests.last().map_or(
@@ -85,8 +86,8 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 T::from_distance_to_metric(diff) < max.distance_metric
             })
         {
-            recurse(nearests, kdtree, after, query, axis);
+            recurse(nearests, kdtree, after, query);
         }
     }
-    recurse(nearests, kdtree, 0, query, 0);
+    recurse(nearests, kdtree, 0, query);
 }
