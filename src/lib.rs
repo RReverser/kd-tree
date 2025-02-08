@@ -74,13 +74,15 @@ pub trait KdPoint: Send + Sync {
     fn from_distance_to_metric(distance: Self::Scalar) -> Self::Scalar {
         distance * distance
     }
+    fn distance_to_hyperplane(&self, other: &Self, axis: usize) -> Self::Scalar {
+        Self::from_distance_to_metric(self.at(axis) - other.at(axis))
+    }
     // Distance metric - doesn't need to be an actual distance, as long
     // as it preserves the order.
     // By default returns a squared distance.
     fn distance_metric(&self, other: &Self) -> Self::Scalar {
         (0..Self::DIM)
-            .map(move |i| self.at(i) - other.at(i))
-            .map(|diff| diff * diff)
+            .map(move |i| self.distance_to_hyperplane(other, i))
             .fold(zero(), |sum, x| sum + x)
     }
 }
