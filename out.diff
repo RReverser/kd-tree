@@ -1,0 +1,50 @@
+diff --git a/src/nearests.rs b/src/nearests.rs
+index 94ff5e0..2a55fc3 100644
+--- a/src/nearests.rs
++++ b/src/nearests.rs
+@@ -45,11 +45,11 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+     fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+         nearests: &mut V,
+         kdtree: &'a [T],
+-        mut k: usize,
++        k: usize,
+         mut axis: usize,
+         query: &T,
+     ) {
+-        let item = match kdtree.get(k) {
++        let item = match kdtree.get(0) {
+             Some(item) => item,
+             None => return,
+         };
+@@ -57,20 +57,19 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+         unsafe {
+             std::hint::assert_unchecked(axis < T::DIM);
+         }
+-        k = 2 * k + 1;
+         let after_and_diff = if k < kdtree.len() {
+             let diff = query.at(axis) - item.at(axis);
+             axis += 1;
+             if axis == T::DIM {
+                 axis = 0;
+             }
+-            let (mut before, mut after) = (0, 1);
++            let (mut before, mut after) = (k + 1, k + 2);
+             if diff.is_positive() {
+                 std::mem::swap(&mut before, &mut after);
+             }
+             before += k;
+             after += k;
+-            recurse(nearests, kdtree, before, axis, query);
++            recurse(nearests, &kdtree[before..], before, axis, query);
+             (after < kdtree.len()).then_some((after, diff))
+         } else {
+             None
+@@ -94,7 +93,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+             if nearests.last().map_or(true, |max| {
+                 T::from_distance_to_metric(diff) < max.distance_metric
+             }) {
+-                recurse(nearests, kdtree, after, axis, query);
++                recurse(nearests, &kdtree[after..], after, axis, query);
+             }
+         }
+     }

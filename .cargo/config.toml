@@ -1,0 +1,2 @@
+[target.x86_64-pc-windows-msvc]
+runner = ["pwsh", "D:\\run_bench.ps1"]

@@ -45,33 +45,36 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
     fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         nearests: &mut V,
         kdtree: &'a [T],
-        mut k: usize,
+        item: &'a T,
         mut axis: usize,
         query: &T,
     ) {
-        let item = match kdtree.get(k) {
-            Some(item) => item,
-            None => return,
-        };
         let distance_metric = item.distance_metric(query);
         unsafe {
             std::hint::assert_unchecked(axis < T::DIM);
         }
-        k = 2 * k + 1;
-        let after_and_diff = if k < kdtree.len() {
+        let k = kdtree
+            .get(
+                unsafe { std::ptr::from_ref::<T>(item).offset_from(kdtree.as_ptr()) as usize }
+                    * 2
+                    + 1..,
+            )
+            .unwrap_or_default();
+        let after_and_diff = if let [before, rest @ ..] = k {
             let diff = query.at(axis) - item.at(axis);
             axis += 1;
             if axis == T::DIM {
                 axis = 0;
             }
-            let (mut before, mut after) = (0, 1);
             if diff.is_positive() {
-                std::mem::swap(&mut before, &mut after);
+                if let Some(after) = rest.first() {
+                    recurse(nearests, kdtree, after, axis, query);
+                }
+                Some((before, diff))
+            } else {
+                recurse(nearests, kdtree, before, axis, query);
+                rest.first().map(|after| (after, diff))
             }
-            before += k;
-            after += k;
-            recurse(nearests, kdtree, before, axis, query);
-            (after < kdtree.len()).then_some((after, diff))
         } else {
             None
         };
@@ -98,5 +101,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             }
         }
     }
-    recurse(nearests, kdtree, 0, 0, query);
+    if let Some(first) = kdtree.first() {
+        recurse(nearests, kdtree, first, 0, query);
+    }
 }

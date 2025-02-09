@@ -1,0 +1,6 @@
+{
+	"terminal.integrated.enablePersistentSessions": true,
+	"disasexpl.associations": {
+		"**/*.rs": "D:\\kd-tree\\target\\release\\deps\\benchmark-aad567e046114f79.s"
+	}
+}
