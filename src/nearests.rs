@@ -58,9 +58,9 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         unsafe {
             std::hint::assert_unchecked(axis < T::DIM);
         }
-        let diff = query.at(axis) - item.at(axis);
         k = 2 * k + 1;
-        let after = kdtree.get(k).and_then(|next_start| {
+        let after_and_diff = if k < kdtree.len() {
+            let diff = query.at(axis) - item.at(axis);
             axis += 1;
             if axis == T::DIM {
                 axis = 0;
@@ -71,11 +71,16 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             }
             before += k;
             after += k;
-            prefetch::<Read, High, Data, T>(next_start);
             recurse(nearests, kdtree, before, axis, query);
-            (after < kdtree.len()).then_some(after)
-        });
-        let i = nearests.partition_point(|item| item.distance_metric < distance_metric);
+            (after < kdtree.len()).then_some((after, diff))
+        } else {
+            None
+        };
+        // note: for small K in KNN a linear search is noticeably faster than binary one
+        let i = nearests
+            .iter()
+            .position(|item| item.distance_metric > distance_metric)
+            .unwrap_or(nearests.len());
         if i < nearests.capacity() {
             nearests.truncate(nearests.capacity() - 1);
             nearests.insert(
@@ -86,7 +91,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 },
             );
         }
-        if let Some(after) = after {
+        if let Some((after, diff)) = after_and_diff {
             if nearests.last().map_or(true, |max| {
                 T::from_distance_to_metric(diff) < max.distance_metric
             }) {
