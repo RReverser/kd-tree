@@ -1,5 +1,6 @@
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
+use num_traits::Signed;
 use prefetch::prefetch::{prefetch, Data, High, Read};
 use std::ops::DerefMut;
 
@@ -55,14 +56,15 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         let axis = (k + 1).ilog2() as usize % T::DIM;
         k = 2 * k + 1;
         let (mut before, mut after) = (k, k + 1);
+        let diff = query.at(axis) - item.at(axis);
+        let distance_metric = item.distance_metric(query);
         if let Some(next_start) = kdtree.get(k) {
             prefetch::<Read, High, Data, T>(next_start);
-            if query.at(axis) > item.at(axis) {
+            if diff.is_positive() {
                 std::mem::swap(&mut before, &mut after);
             }
             recurse(nearests, kdtree, before, query);
         }
-        let distance_metric = item.distance_metric(query);
         let i = nearests.partition_point(|item| item.distance_metric < distance_metric);
         if i < nearests.capacity() {
             nearests.truncate(nearests.capacity() - 1);
@@ -76,7 +78,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         }
         if after < kdtree.len()
             && nearests.last().map_or(true, |max| {
-                query.distance_to_hyperplane(item, axis) < max.distance_metric
+                T::from_distance_to_metric(diff) < max.distance_metric
             })
         {
             recurse(nearests, kdtree, after, query);
