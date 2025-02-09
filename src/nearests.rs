@@ -92,7 +92,8 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             );
         }
         if let Some((after, diff)) = after_and_diff {
-            if nearests.last().map_or(true, |max| {
+            // Check the N-1 item - this covers both if nearests is not full yet and if it is, but the new item is closer.
+            if nearests.get(nearests.capacity() - 1).map_or(true, |max| {
                 T::from_distance_to_metric(diff) < max.distance_metric
             }) {
                 recurse(nearests, kdtree, after, axis, query);
