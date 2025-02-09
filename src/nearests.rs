@@ -67,6 +67,9 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                     },
                 );
             }
+            unsafe {
+                std::hint::assert_unchecked(axis < T::DIM);
+            }
             query.at(axis) - item.at(axis)
         };
         k = 2 * k + 1;
