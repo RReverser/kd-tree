@@ -50,30 +50,17 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         mut axis: usize,
         query: &T,
     ) {
-        let diff = {
-            let item = match kdtree.get(k) {
-                Some(item) => item,
-                None => return,
-            };
-            let distance_metric = item.distance_metric(query);
-            let i = nearests.partition_point(|item| item.distance_metric < distance_metric);
-            if i < nearests.capacity() {
-                nearests.truncate(nearests.capacity() - 1);
-                nearests.insert(
-                    i,
-                    ItemAndDistance {
-                        item,
-                        distance_metric,
-                    },
-                );
-            }
-            unsafe {
-                std::hint::assert_unchecked(axis < T::DIM);
-            }
-            query.at(axis) - item.at(axis)
+        let item = match kdtree.get(k) {
+            Some(item) => item,
+            None => return,
         };
+        let distance_metric = item.distance_metric(query);
+        unsafe {
+            std::hint::assert_unchecked(axis < T::DIM);
+        }
+        let diff = query.at(axis) - item.at(axis);
         k = 2 * k + 1;
-        if let Some(next_start) = kdtree.get(k) {
+        let after = kdtree.get(k).and_then(|next_start| {
             axis += 1;
             if axis == T::DIM {
                 axis = 0;
@@ -82,12 +69,28 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             if diff.is_positive() {
                 std::mem::swap(&mut before, &mut after);
             }
+            before += k;
+            after += k;
             prefetch::<Read, High, Data, T>(next_start);
-            recurse(nearests, kdtree, k + before, axis, query);
+            recurse(nearests, kdtree, before, axis, query);
+            (after < kdtree.len()).then_some(after)
+        });
+        let i = nearests.partition_point(|item| item.distance_metric < distance_metric);
+        if i < nearests.capacity() {
+            nearests.truncate(nearests.capacity() - 1);
+            nearests.insert(
+                i,
+                ItemAndDistance {
+                    item,
+                    distance_metric,
+                },
+            );
+        }
+        if let Some(after) = after {
             if nearests.last().map_or(true, |max| {
                 T::from_distance_to_metric(diff) < max.distance_metric
             }) {
-                recurse(nearests, kdtree, k + after, axis, query);
+                recurse(nearests, kdtree, after, axis, query);
             }
         }
     }
