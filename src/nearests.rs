@@ -50,34 +50,32 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         query: &T,
     ) {
         let distance_metric = item.distance_metric(query);
-        unsafe {
-            std::hint::assert_unchecked(axis < T::DIM);
-        }
-        let k = kdtree
+        let after_and_diff = kdtree
             .get(
                 unsafe { std::ptr::from_ref::<T>(item).offset_from(kdtree.as_ptr()) as usize }
                     * 2
                     + 1..,
             )
-            .unwrap_or_default();
-        let after_and_diff = if let [before, rest @ ..] = k {
-            let diff = query.at(axis) - item.at(axis);
-            axis += 1;
-            if axis == T::DIM {
-                axis = 0;
-            }
-            if diff.is_positive() {
-                if let Some(after) = rest.first() {
-                    recurse(nearests, kdtree, after, axis, query);
+            .and_then(|slice| slice.split_first())
+            .and_then(|(before, rest)| {
+                unsafe {
+                    std::hint::assert_unchecked(axis < T::DIM);
                 }
-                Some((before, diff))
-            } else {
-                recurse(nearests, kdtree, before, axis, query);
-                rest.first().map(|after| (after, diff))
-            }
-        } else {
-            None
-        };
+                let diff = query.at(axis) - item.at(axis);
+                axis += 1;
+                if axis == T::DIM {
+                    axis = 0;
+                }
+                if diff.is_positive() {
+                    if let Some(after) = rest.first() {
+                        recurse(nearests, kdtree, after, axis, query);
+                    }
+                    Some((before, diff))
+                } else {
+                    recurse(nearests, kdtree, before, axis, query);
+                    rest.first().map(|after| (after, diff))
+                }
+            });
         // note: for small K in KNN a linear search is noticeably faster than binary one
         let i = nearests
             .iter()
