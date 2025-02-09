@@ -85,7 +85,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             distance_metric: item.distance_metric(query),
         };
 
-        let after_and_diff = kdtree
+        let before_and_rest = kdtree
             .get(
                 unsafe { std::ptr::from_ref::<T>(item).offset_from(kdtree.as_ptr()) as usize }
                     * 2
@@ -93,7 +93,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             )
             .and_then(|slice| slice.split_first());
 
-        if let Some((before, rest)) = after_and_diff {
+        if let Some((before, rest)) = before_and_rest {
             unsafe {
                 std::hint::assert_unchecked(axis < T::DIM);
             }
@@ -119,6 +119,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             add_maybe_nearest(nearests, new_item);
         }
     }
+
     if let Some(first) = kdtree.first() {
         recurse(nearests, kdtree, first, 0, query);
     }
