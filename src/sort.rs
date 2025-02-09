@@ -1,6 +1,6 @@
 use crate::KdPoint;
 use std::cell::UnsafeCell;
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::mem::MaybeUninit;
 
 // A wrapper similar to OrderedFloat but for generic types.
@@ -61,21 +61,35 @@ pub fn kd_sort_by<T: KdPoint>(points: &mut [T]) {
         mut k: usize,    // Logical Eytzinger index (root starts at 1)
         mut axis: usize, // Depth in the tree, to choose the axis
     ) {
-        let Some(output_point) = output.get(k) else {
+        let Some(output_point) = output.get(k - 1) else {
             return;
         };
 
-        if points.is_empty() {
-            return;
-        }
+        let left_count = match points.len() {
+            1 => 0,
+            // this is some complicated math to avoid sorting the array before Eytzingerization
+            // (besides, for multi-dimensional data it's not really that much simpler to presort
+            // and then do BFS)
+            n => {
+                // height of the fully-filled levels of the tree
+                let h = n.ilog2();
+                // left subtree cannot have more than 2^h - 1 nodes
+                let left_subtree_capacity = (1 << h) - 1;
+                // right subtree must have at least 2^(h-1) nodes
+                let right_subtree_min_len = 1 << (h - 1);
+                // max number of nodes in the left subtree if last level is partially filled
+                let number_of_extra_nodes_in_left_subtree = n - right_subtree_min_len;
+                min(number_of_extra_nodes_in_left_subtree, left_subtree_capacity)
+            }
+        };
 
-        let (left, median, right) =
-            points.select_nth_unstable_by_key(points.len() / 2, |p| OrdHelper(p.at(axis)));
+        let (left, split, right) =
+            points.select_nth_unstable_by_key(left_count, |p| OrdHelper(p.at(axis)));
 
         unsafe {
             // SAFETY: in Eytzingerization, each k points to a unique item that no other thread should override.
             // As long as we mutably access only the item pointed to by k, we are safe.
-            output_point.get().copy_from_nonoverlapping(median, 1);
+            output_point.get().copy_from_nonoverlapping(split, 1);
         }
 
         k *= 2;
@@ -86,8 +100,8 @@ pub fn kd_sort_by<T: KdPoint>(points: &mut [T]) {
         }
 
         rayon::join(
-            move || build_eytzinger_kdtree(output, left, k + 1, axis),
-            move || build_eytzinger_kdtree(output, right, k + 2, axis),
+            move || build_eytzinger_kdtree(output, left, k, axis),
+            move || build_eytzinger_kdtree(output, right, k + 1, axis),
         );
     }
 
@@ -95,8 +109,21 @@ pub fn kd_sort_by<T: KdPoint>(points: &mut [T]) {
     unsafe {
         output.set_len(output.capacity());
     }
-    build_eytzinger_kdtree(&output, points, 0, 0);
+    build_eytzinger_kdtree(&output, points, 1, 0);
     unsafe {
         std::ptr::copy_nonoverlapping(output.as_ptr().cast(), points.as_mut_ptr(), points.len());
     }
+}
+
+#[test]
+fn check_single_dimensional_sort() {
+    let mut points = (1..=5).map(|x| [x]).collect::<Vec<_>>();
+    kd_sort_by(&mut points);
+    let points = points.iter().map(|p| p[0]).collect::<Vec<_>>();
+    assert_eq!(points, vec![4, 2, 5, 1, 3]);
+
+    let mut points = (1..=4).map(|x| [x]).collect::<Vec<_>>();
+    kd_sort_by(&mut points);
+    let points = points.iter().map(|p| p[0]).collect::<Vec<_>>();
+    assert_eq!(points, vec![3, 2, 4, 1]);
 }
