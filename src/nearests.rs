@@ -1,7 +1,6 @@
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
-use prefetch::prefetch::{prefetch, Data, High, Read};
 use std::ops::DerefMut;
 
 pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
