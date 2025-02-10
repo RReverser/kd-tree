@@ -36,6 +36,7 @@ lto = "thin"
 [profile.bench-callgrind]
 inherits = "bench"
 debug = true
+lto = false
 
 [[bench]]
 name = "callgrind"
