@@ -85,7 +85,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
             );
         }
         if !after.is_empty()
-            && nearests.last().map_or(true, |max| {
+            && nearests.get(nearests.capacity() - 1).map_or(true, |max| {
                 T::from_distance_to_metric(diff) < max.distance_metric
             })
         {
