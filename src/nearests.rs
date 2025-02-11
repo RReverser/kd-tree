@@ -2,6 +2,7 @@ use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
+use std::hint::assert_unchecked;
 use std::ops::DerefMut;
 
 pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
@@ -52,6 +53,9 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         let Some((mut before, item, mut after)) = split_at_mid(kdtree) else {
             return;
         };
+        unsafe {
+            assert_unchecked(axis < T::DIM);
+        }
         let diff = query.at(axis) - item.at(axis);
         if diff.is_positive() {
             std::mem::swap(&mut before, &mut after);
