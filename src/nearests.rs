@@ -1,4 +1,3 @@
-use crate::sort::OrdHelper;
 use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
@@ -65,17 +64,12 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         }
         recurse(nearests, before, query, next_axis);
         let distance_metric = item.distance_metric(query);
-        if nearests.len() < nearests.capacity()
-            || nearests.last().map_or(
-                /* unreachable */ false,
-                |max| distance_metric < max.distance_metric,
-            )
-        {
+        let i = nearests
+            .iter()
+            .rposition(move |item| item.distance_metric <= distance_metric)
+            .map_or(0, |i| i + 1);
+        if i < nearests.capacity() {
             nearests.truncate(nearests.capacity() - 1);
-            let (Ok(i) | Err(i)) = nearests
-                .binary_search_by_key(&OrdHelper(distance_metric), move |item| {
-                    OrdHelper(item.distance_metric)
-                });
             nearests.insert(
                 i,
                 ItemAndDistance {
