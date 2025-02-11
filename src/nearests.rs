@@ -49,10 +49,8 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         query: &T,
         axis: usize,
     ) {
-        let (mut before, item, mut after) = split_at_mid(kdtree);
-        let item = match item {
-            Some(item) => item,
-            None => return,
+        let Some((mut before, item, mut after)) = split_at_mid(kdtree) else {
+            return;
         };
         let diff = query.at(axis) - item.at(axis);
         if diff.is_positive() {
