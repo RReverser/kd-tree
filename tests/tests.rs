@@ -38,6 +38,26 @@ fn test_nearests() {
 }
 
 #[test]
+fn test_nearests_arr() {
+    let mut gen3d = random3d_generator();
+    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
+    const NUM: usize = 5;
+    for _ in 0..100 {
+        let query = gen3d();
+        let found = kdtree.nearests_arr::<NUM>(&query);
+        assert_eq!(found.len(), NUM);
+        for i in 1..found.len() {
+            assert!(found[i - 1].distance_metric <= found[i].distance_metric);
+        }
+        let count = kdtree
+            .iter()
+            .filter(|p| squared_distance(p, &query) <= found[NUM - 1].distance_metric)
+            .count();
+        assert_eq!(count, NUM);
+    }
+}
+
+#[test]
 fn test_within() {
     let mut gen3d = random3d_generator();
     let kdtree = KdTree::build(vec(10000, |_| gen3d()));
