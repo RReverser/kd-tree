@@ -30,7 +30,7 @@ mod split_at_mid;
 mod within;
 use arrayvec::ArrayVec;
 use nearests::*;
-use num_traits::{zero, Signed};
+use num_traits::{zero, Signed, Zero};
 use sort::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
@@ -66,7 +66,7 @@ use within::*;
 /// assert_eq!(*kdtree.nearest(&Point3D { x: 3.1, y: 0.1, z: 2.2 }).unwrap().item, Point3D { x: 3.0, y: 1.0, z: 2.0 });
 /// ```
 pub trait KdPoint: Send + Sync {
-    type Scalar: Signed + Copy + PartialOrd + Send + Sync;
+    type Scalar: Signed + Zero + Copy + PartialOrd + Send + Sync;
     const DIM: usize;
     fn at(&self, i: usize) -> Self::Scalar;
     // Conversion from actual distance to the metric used for comparisons.
@@ -130,7 +130,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
     /// ```
     pub fn nearests(&self, query: &T, num: usize) -> Vec<ItemAndDistance<T>> {
         let mut nearests = Vec::with_capacity(num);
-        kd_nearests(&mut nearests, self, query);
+        kd_nearests(&mut nearests, self, query, 0);
         nearests
     }
 
@@ -141,7 +141,17 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
         query: &T,
     ) -> ArrayVec<ItemAndDistance<'a, T>, N> {
         let mut nearests = ArrayVec::new();
-        kd_nearests(&mut nearests, self, query);
+        kd_nearests(&mut nearests, self, query, 0);
+        nearests
+    }
+
+    /// Same as [`Self::nearests`], but returns an ArrayVec.
+    /// Will be faster for small number of points.
+    pub fn nearests_all<'a, const N: usize>(&'a self) -> Vec<ArrayVec<ItemAndDistance<'a, T>, N>> {
+        let mut nearests = std::iter::repeat_with(ArrayVec::new)
+            .take(self.len())
+            .collect::<Vec<_>>();
+        kd_nearests_all(&mut nearests, self, 0);
         nearests
     }
 

@@ -1,6 +1,7 @@
 #![cfg(test)]
 #![allow(clippy::float_cmp)]
 use kd_tree::*;
+use rand::Rng;
 
 #[test]
 fn test_nearest() {
@@ -34,6 +35,23 @@ fn test_nearests() {
             .filter(|p| squared_distance(p, &query) <= found[NUM - 1].distance_metric)
             .count();
         assert_eq!(count, NUM);
+    }
+}
+
+#[test]
+fn test_nearests_all() {
+    let mut gen3d = random3d_generator();
+    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
+    const NUM: usize = 5;
+    let nearests_all = kdtree.nearests_all::<NUM>();
+    for _ in 0..100 {
+        let query = rand::thread_rng().gen_range(0..kdtree.len());
+        let found = kdtree.nearests_arr::<NUM>(&kdtree[query]);
+        let expected = &nearests_all[query];
+        assert!(
+            &found == expected,
+            " Left: {found:.1?}\nRight: {expected:.1?}"
+        );
     }
 }
 

@@ -2,7 +2,9 @@ use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
+use num_traits::Zero;
 use std::hint::assert_unchecked;
+use std::iter::zip;
 use std::ops::DerefMut;
 
 pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
@@ -43,56 +45,109 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
     nearests: &mut V,
     kdtree: &'a [T],
     query: &T,
+    mut axis: usize,
 ) {
-    fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
-        nearests: &mut V,
-        kdtree: &'a [T],
-        query: &T,
-        mut axis: usize,
-    ) {
-        match split_at_mid(kdtree) {
-            None => {}
-            Some(([], item, [])) => {
+    match split_at_mid(kdtree) {
+        None => {}
+        Some(([], item, [])) => {
+            insert_nearests(
+                nearests,
+                ItemAndDistance {
+                    item,
+                    distance_metric: query.distance_metric(item),
+                },
+            );
+        }
+        Some((mut before, item, mut after)) => {
+            unsafe {
+                assert_unchecked(axis < T::DIM);
+            }
+            let diff = query.at(axis) - item.at(axis);
+            if diff.is_positive() {
+                std::mem::swap(&mut before, &mut after);
+            }
+            axis += 1;
+            if axis == T::DIM {
+                axis = 0;
+            }
+            kd_nearests(nearests, before, query, axis);
+            insert_nearests(
+                nearests,
+                ItemAndDistance {
+                    item,
+                    distance_metric: query.distance_metric(item),
+                },
+            );
+            if !after.is_empty()
+                && nearests.get(nearests.capacity() - 1).map_or(true, |max| {
+                    T::from_distance_to_metric(diff) < max.distance_metric
+                })
+            {
+                kd_nearests(nearests, after, query, axis);
+            }
+        }
+    }
+}
+
+pub fn kd_nearests_all<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+    nearests: &mut [V],
+    kdtree: &'a [T],
+    axis: usize,
+) {
+    debug_assert_eq!(kdtree.len(), nearests.len());
+    match split_at_mid(kdtree) {
+        None => {}
+        Some(([], item, [])) => {
+            let nearests = &mut nearests[0];
+            // We expect that the item itself is reached first as its own nearest, so
+            // its nearests list should be empty at this point.
+            debug_assert!(nearests.is_empty());
+            insert_nearests(
+                nearests,
+                ItemAndDistance {
+                    item,
+                    distance_metric: T::Scalar::zero(),
+                },
+            );
+        }
+        Some((before, mid, after)) => {
+            let mut next_axis = axis + 1;
+            if next_axis == T::DIM {
+                next_axis = 0;
+            }
+            kd_nearests_all(&mut nearests[..before.len()], before, next_axis);
+            // search the midpoint in "after" too; the loop below will take care of inserting itself and searching in "before"
+            kd_nearests(&mut nearests[before.len()], after, mid, next_axis);
+            kd_nearests_all(&mut nearests[before.len() + 1..], after, next_axis);
+            for (query, nearests) in zip(kdtree, &mut nearests[..]) {
                 insert_nearests(
                     nearests,
                     ItemAndDistance {
-                        item,
-                        distance_metric: query.distance_metric(item),
+                        item: mid,
+                        distance_metric: query.distance_metric(mid),
                     },
                 );
             }
-            Some((mut before, item, mut after)) => {
-                unsafe {
-                    assert_unchecked(axis < T::DIM);
-                }
-                let diff = query.at(axis) - item.at(axis);
-                if diff.is_positive() {
-                    std::mem::swap(&mut before, &mut after);
-                }
-                axis += 1;
-                if axis == T::DIM {
-                    axis = 0;
-                }
-                recurse(nearests, before, query, axis);
-                insert_nearests(
-                    nearests,
-                    ItemAndDistance {
-                        item,
-                        distance_metric: query.distance_metric(item),
-                    },
-                );
-                if !after.is_empty()
-                    && nearests.get(nearests.capacity() - 1).map_or(true, |max| {
-                        T::from_distance_to_metric(diff) < max.distance_metric
-                    })
-                {
-                    recurse(nearests, after, query, axis);
+            // Now search opposite sides, but only where it might be closer than the farthest nearest of current item.
+            let (nearests_before, nearests_mid_and_after) = nearests.split_at_mut(before.len());
+            let sides = [
+                (before, nearests_before, after),
+                (&kdtree[before.len()..], nearests_mid_and_after, before),
+            ];
+            for (side, nearests, other_kd) in sides {
+                if !other_kd.is_empty() {
+                    for (query, nearests) in zip(side, nearests) {
+                        if nearests.get(nearests.capacity() - 1).map_or(true, |max| {
+                            T::from_distance_to_metric(query.at(axis) - mid.at(axis))
+                                < max.distance_metric
+                        }) {
+                            kd_nearests(nearests, other_kd, query, next_axis);
+                        }
+                    }
                 }
             }
         }
     }
-
-    recurse(nearests, kdtree, query, 0);
 }
 
 fn insert_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
