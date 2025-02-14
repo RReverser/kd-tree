@@ -31,9 +31,16 @@ fn knn_graph(points: KdTree<XYZCoord, Vec<XYZCoord>>) {
     });
 }
 
+#[library_benchmark(setup = build_kdtree)]
+#[bench::small(1_000)]
+#[bench::large(1_000_000)]
+fn knn_graph_all(points: KdTree<XYZCoord, Vec<XYZCoord>>) {
+    black_box(points.nearests_all::<4>());
+}
+
 library_benchmark_group!(
     name = benches;
-    benchmarks = build, knn_graph
+    benchmarks = build, knn_graph, knn_graph_all
 );
 
 main!(library_benchmark_groups = benches);
