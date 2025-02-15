@@ -206,6 +206,25 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     });
 }
 
+fn bench_kdtree_k_all_nearest_search(c: &mut Criterion) {
+    use rayon::prelude::*;
+
+    let kd_tree = KdTree::build(gen_points3d(1_000_000));
+
+    c.benchmark_group("nearests_all")
+        .bench_function(BenchmarkId::new("kd_tree with arr", 4), |b| {
+            b.iter(|| {
+                kd_tree
+                    .par_iter()
+                    .map(|point| kd_tree.nearests_arr::<4>(point))
+                    .collect::<Vec<_>>()
+            });
+        })
+        .bench_function(BenchmarkId::new("kd_tree_all with arr", 4), |b| {
+            b.iter(|| kd_tree.nearests_all::<4>());
+        });
+}
+
 fn bench_kdtree_within_radius(c: &mut Criterion) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
@@ -249,6 +268,7 @@ criterion_group!(
     bench_kdtree_construction,
     bench_kdtree_nearest_search,
     bench_kdtree_k_nearest_search,
+    bench_kdtree_k_all_nearest_search,
     bench_kdtree_within_radius
 );
 criterion_main!(benches);

@@ -3,6 +3,7 @@ use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
 use num_traits::Zero;
+use rayon::prelude::*;
 use std::hint::assert_unchecked;
 use std::iter::zip;
 use std::ops::DerefMut;
@@ -89,7 +90,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
     }
 }
 
-pub fn kd_nearests_all<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
+pub fn kd_nearests_all<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>> + Send>(
     nearests: &mut [V],
     kdtree: &'a [T],
     axis: usize,
@@ -115,26 +116,32 @@ pub fn kd_nearests_all<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>
             if next_axis == T::DIM {
                 next_axis = 0;
             }
-            kd_nearests_all(&mut nearests[..before.len()], before, next_axis);
-            // search the midpoint in "after" too; the loop below will take care of inserting itself and searching in "before"
-            kd_nearests(&mut nearests[before.len()], after, mid, next_axis);
-            kd_nearests_all(&mut nearests[before.len() + 1..], after, next_axis);
-            for (query, nearests) in zip(kdtree, &mut nearests[..]) {
-                insert_nearests(
-                    nearests,
-                    ItemAndDistance {
-                        item: mid,
-                        distance_metric: query.distance_metric(mid),
-                    },
-                );
-            }
+            let (nearests_before, nearests_mid_and_after) = nearests.split_at_mut(before.len());
+            rayon::join(
+                move || kd_nearests_all(nearests_before, before, next_axis),
+                move || {
+                    // search the midpoint in "after" too; the loop below will take care of inserting itself and searching in "before"
+                    let (nearests_mid, nearests_after) =
+                        nearests_mid_and_after.split_first_mut().unwrap();
+                    kd_nearests(nearests_mid, after, mid, next_axis);
+                    kd_nearests_all(nearests_after, after, next_axis);
+                },
+            );
+            kdtree
+                .par_iter()
+                .zip(&mut nearests[..])
+                .for_each(|(query, nearests)| {
+                    insert_nearests(
+                        nearests,
+                        ItemAndDistance {
+                            item: mid,
+                            distance_metric: query.distance_metric(mid),
+                        },
+                    );
+                });
             // Now search opposite sides, but only where it might be closer than the farthest nearest of current item.
             let (nearests_before, nearests_mid_and_after) = nearests.split_at_mut(before.len());
-            let sides = [
-                (before, nearests_before, after),
-                (&kdtree[before.len()..], nearests_mid_and_after, before),
-            ];
-            for (side, nearests, other_kd) in sides {
+            let handle_side = |side: &'a [T], nearests: &mut [V], other_kd: &'a [T]| {
                 if !other_kd.is_empty() {
                     for (query, nearests) in zip(side, nearests) {
                         if nearests.get(nearests.capacity() - 1).map_or(true, |max| {
@@ -145,7 +152,11 @@ pub fn kd_nearests_all<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>
                         }
                     }
                 }
-            }
+            };
+            rayon::join(
+                move || handle_side(before, nearests_before, &kdtree[before.len()..]),
+                move || handle_side(&kdtree[before.len()..], nearests_mid_and_after, before),
+            );
         }
     }
 }
