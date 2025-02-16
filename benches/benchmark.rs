@@ -18,14 +18,6 @@ fn bench_kdtree_construction(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
-            BenchmarkId::new("kd_tree (i32)", log10n),
-            log10n,
-            |b, log10n| {
-                let points = gen_points3i(10usize.pow(*log10n));
-                b.iter_with_setup(move || points.clone(), KdTree::build);
-            },
-        );
-        group.bench_with_input(
             BenchmarkId::new("fux_kdtree", log10n),
             log10n,
             |b, log10n| {
@@ -62,17 +54,6 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             log10n,
             |b, log10n| {
                 let kdtree = KdTree::build(gen_points3d(10usize.pow(*log10n)));
-                b.iter_with_setup(
-                    || rng.gen::<usize>() % kdtree.len(),
-                    |i| kdtree.nearest(&kdtree[i]).unwrap(),
-                );
-            },
-        );
-        group.bench_with_input(
-            BenchmarkId::new("kd_tree (i32)", log10n),
-            log10n,
-            |b, log10n| {
-                let kdtree = KdTree::build(gen_points3i(10usize.pow(*log10n)));
                 b.iter_with_setup(
                     || rng.gen::<usize>() % kdtree.len(),
                     |i| kdtree.nearest(&kdtree[i]).unwrap(),
@@ -302,15 +283,4 @@ fn gen_points3d(count: usize) -> Vec<TestItem<f64>> {
     std::iter::repeat_with(move || TestItem { coord: rng.gen() })
         .take(count)
         .collect()
-}
-
-fn gen_points3i(count: usize) -> Vec<TestItem<i32>> {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    const N: i32 = 1000;
-    std::iter::repeat_with(move || TestItem {
-        coord: rng.gen::<Point3<i32>>().map(|x| x % N),
-    })
-    .take(count)
-    .collect()
 }
