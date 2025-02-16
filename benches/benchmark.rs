@@ -2,6 +2,9 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use kd_tree::*;
+use nalgebra::{point, Point3, Scalar};
+use num_traits::Signed;
+use std::ops::SubAssign;
 
 fn bench_kdtree_construction(c: &mut Criterion) {
     let mut group = c.benchmark_group("construct");
@@ -40,7 +43,7 @@ fn bench_kdtree_construction(c: &mut Criterion) {
                 |points| {
                     let mut kdtree = kdtree::KdTree::new(3);
                     for p in &points {
-                        kdtree.add(p.coord, p.id).unwrap();
+                        kdtree.add(p.coord.coords, p.id).unwrap();
                     }
                     kdtree
                 },
@@ -103,13 +106,17 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             let points = gen_points3d(10usize.pow(*log10n));
             let mut kdtree = kdtree::KdTree::new(3);
             for p in &points {
-                kdtree.add(&p.coord, p.id).unwrap();
+                kdtree.add(p.coord.coords, p.id).unwrap();
             }
             b.iter_with_setup(
                 || rng.gen::<usize>() % points.len(),
                 |i| {
                     kdtree
-                        .nearest(&points[i].coord, 1, &kdtree::distance::squared_euclidean)
+                        .nearest(
+                            points[i].coord.coords.as_slice(),
+                            1,
+                            &kdtree::distance::squared_euclidean,
+                        )
                         .unwrap()
                 },
             )
@@ -126,7 +133,7 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     let kdtree = {
         let mut kdtree = kdtree::KdTree::new(3);
         for p in &points {
-            kdtree.add(&p.coord, p.id).unwrap();
+            kdtree.add(p.coord.coords, p.id).unwrap();
         }
         kdtree
     };
@@ -162,7 +169,11 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
                 |i| {
                     assert_eq!(
                         kdtree
-                            .nearest(&points[i].coord, *k, &kdtree::distance::squared_euclidean)
+                            .nearest(
+                                points[i].coord.coords.as_slice(),
+                                *k,
+                                &kdtree::distance::squared_euclidean
+                            )
                             .unwrap()[0]
                             .1,
                         &points[i].id
@@ -215,7 +226,7 @@ fn bench_kdtree_within_radius(c: &mut Criterion) {
     let kdtree = {
         let mut kdtree = kdtree::KdTree::new(3);
         for p in &points {
-            kdtree.add(&p.coord, p.id).unwrap();
+            kdtree.add(p.coord.coords, p.id).unwrap();
         }
         kdtree
     };
@@ -233,7 +244,7 @@ fn bench_kdtree_within_radius(c: &mut Criterion) {
                 |i| {
                     kdtree
                         .within(
-                            &points[i].coord,
+                            points[i].coord.coords.as_slice(),
                             *radius * *radius,
                             &kdtree::distance::squared_euclidean,
                         )
@@ -254,11 +265,13 @@ criterion_group!(
 criterion_main!(benches);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct TestItem<T> {
-    coord: [T; 3],
+struct TestItem<T: Scalar> {
+    coord: Point3<T>,
     id: usize,
 }
-impl<T: num_traits::Signed + Copy + PartialOrd + Send + Sync> KdPoint for TestItem<T> {
+impl<T: nalgebra::Scalar + Copy + PartialOrd + Signed + Send + Sync + SubAssign> KdPoint
+    for TestItem<T>
+{
     type Scalar = T;
     const DIM: usize = 3;
     fn at(&self, k: usize) -> T {
@@ -267,7 +280,7 @@ impl<T: num_traits::Signed + Copy + PartialOrd + Send + Sync> KdPoint for TestIt
 }
 impl fux_kdtree::kdtree::KdtreePointTrait for TestItem<f64> {
     fn dims(&self) -> &[f64] {
-        &self.coord
+        self.coord.coords.as_slice()
     }
 }
 
@@ -276,7 +289,7 @@ fn gen_points3d(count: usize) -> Vec<TestItem<f64>> {
     let mut rng = rand::thread_rng();
     let mut points = Vec::with_capacity(count);
     for id in 0..count {
-        let coord = [rng.gen(), rng.gen(), rng.gen()];
+        let coord = point![rng.gen(), rng.gen(), rng.gen()];
         points.push(TestItem { coord, id });
     }
     points
@@ -288,7 +301,7 @@ fn gen_points3i(count: usize) -> Vec<TestItem<i32>> {
     let mut points = Vec::with_capacity(count);
     const N: i32 = 1000;
     for id in 0..count {
-        let coord = [
+        let coord = point![
             rng.gen::<i32>() % N,
             rng.gen::<i32>() % N,
             rng.gen::<i32>() % N,
