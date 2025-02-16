@@ -4,7 +4,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use kd_tree::*;
 use nalgebra::{Point3, Scalar};
 use num_traits::Signed;
-use std::ops::SubAssign;
+use std::ops::{AddAssign, MulAssign, SubAssign};
 
 fn bench_kdtree_construction(c: &mut Criterion) {
     let mut group = c.benchmark_group("construct");
@@ -268,13 +268,26 @@ criterion_main!(benches);
 struct TestItem<T: Scalar> {
     coord: Point3<T>,
 }
-impl<T: nalgebra::Scalar + Copy + PartialOrd + Signed + Send + Sync + SubAssign> KdPoint
-    for TestItem<T>
+impl<
+        T: nalgebra::Scalar
+            + Copy
+            + PartialOrd
+            + Signed
+            + Send
+            + Sync
+            + SubAssign
+            + AddAssign
+            + MulAssign,
+    > KdPoint for TestItem<T>
 {
     type Scalar = T;
     const DIM: usize = 3;
     fn at(&self, k: usize) -> T {
         self.coord[k]
+    }
+    fn distance_metric(&self, other: &Self) -> Self::Scalar {
+        let diff = self.coord - other.coord;
+        diff.dot(&diff)
     }
 }
 impl fux_kdtree::kdtree::KdtreePointTrait for TestItem<f64> {
