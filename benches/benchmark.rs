@@ -2,7 +2,7 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use kd_tree::*;
-use nalgebra::{point, Point3, Scalar};
+use nalgebra::{Point3, Scalar};
 use num_traits::Signed;
 use std::ops::SubAssign;
 
@@ -42,8 +42,8 @@ fn bench_kdtree_construction(c: &mut Criterion) {
                 move || points.clone(),
                 |points| {
                     let mut kdtree = kdtree::KdTree::new(3);
-                    for p in &points {
-                        kdtree.add(p.coord.coords, p.id).unwrap();
+                    for (i, p) in points.iter().enumerate() {
+                        kdtree.add(p.coord.coords, i).unwrap();
                     }
                     kdtree
                 },
@@ -105,8 +105,8 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("kdtree", log10n), log10n, |b, log10n| {
             let points = gen_points3d(10usize.pow(*log10n));
             let mut kdtree = kdtree::KdTree::new(3);
-            for p in &points {
-                kdtree.add(p.coord.coords, p.id).unwrap();
+            for (i, p) in points.iter().enumerate() {
+                kdtree.add(p.coord.coords, i).unwrap();
             }
             b.iter_with_setup(
                 || rng.gen::<usize>() % points.len(),
@@ -132,8 +132,8 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     let points = gen_points3d(N);
     let kdtree = {
         let mut kdtree = kdtree::KdTree::new(3);
-        for p in &points {
-            kdtree.add(p.coord.coords, p.id).unwrap();
+        for (i, p) in points.iter().enumerate() {
+            kdtree.add(p.coord.coords, i).unwrap();
         }
         kdtree
     };
@@ -168,7 +168,7 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
                 || rng.gen::<usize>() % N,
                 |i| {
                     assert_eq!(
-                        kdtree
+                        *kdtree
                             .nearest(
                                 points[i].coord.coords.as_slice(),
                                 *k,
@@ -176,7 +176,7 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
                             )
                             .unwrap()[0]
                             .1,
-                        &points[i].id
+                        i
                     );
                 },
             )
@@ -225,8 +225,8 @@ fn bench_kdtree_within_radius(c: &mut Criterion) {
     let points = gen_points3d(N);
     let kdtree = {
         let mut kdtree = kdtree::KdTree::new(3);
-        for p in &points {
-            kdtree.add(p.coord.coords, p.id).unwrap();
+        for (i, p) in points.iter().enumerate() {
+            kdtree.add(p.coord.coords, i).unwrap();
         }
         kdtree
     };
@@ -267,7 +267,6 @@ criterion_main!(benches);
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TestItem<T: Scalar> {
     coord: Point3<T>,
-    id: usize,
 }
 impl<T: nalgebra::Scalar + Copy + PartialOrd + Signed + Send + Sync + SubAssign> KdPoint
     for TestItem<T>
@@ -287,26 +286,18 @@ impl fux_kdtree::kdtree::KdtreePointTrait for TestItem<f64> {
 fn gen_points3d(count: usize) -> Vec<TestItem<f64>> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let mut points = Vec::with_capacity(count);
-    for id in 0..count {
-        let coord = point![rng.gen(), rng.gen(), rng.gen()];
-        points.push(TestItem { coord, id });
-    }
-    points
+    std::iter::repeat_with(move || TestItem { coord: rng.gen() })
+        .take(count)
+        .collect()
 }
 
 fn gen_points3i(count: usize) -> Vec<TestItem<i32>> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let mut points = Vec::with_capacity(count);
     const N: i32 = 1000;
-    for id in 0..count {
-        let coord = point![
-            rng.gen::<i32>() % N,
-            rng.gen::<i32>() % N,
-            rng.gen::<i32>() % N,
-        ];
-        points.push(TestItem { coord, id });
-    }
-    points
+    std::iter::repeat_with(move || TestItem {
+        coord: rng.gen::<Point3<i32>>().map(|x| x % N),
+    })
+    .take(count)
+    .collect()
 }
