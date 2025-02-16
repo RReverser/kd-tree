@@ -2,7 +2,7 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use kd_tree::*;
-use nalgebra::{Point3, Scalar};
+use nalgebra::{Scalar, UnitVector3};
 use num_traits::Signed;
 use std::ops::{AddAssign, MulAssign, SubAssign};
 
@@ -35,7 +35,7 @@ fn bench_kdtree_construction(c: &mut Criterion) {
                 |points| {
                     let mut kdtree = kdtree::KdTree::new(3);
                     for (i, p) in points.iter().enumerate() {
-                        kdtree.add(p.coord.coords, i).unwrap();
+                        kdtree.add(*p.coord, i).unwrap();
                     }
                     kdtree
                 },
@@ -87,14 +87,14 @@ fn bench_kdtree_nearest_search(c: &mut Criterion) {
             let points = gen_points3d(10usize.pow(*log10n));
             let mut kdtree = kdtree::KdTree::new(3);
             for (i, p) in points.iter().enumerate() {
-                kdtree.add(p.coord.coords, i).unwrap();
+                kdtree.add(*p.coord, i).unwrap();
             }
             b.iter_with_setup(
                 || rng.gen::<usize>() % points.len(),
                 |i| {
                     kdtree
                         .nearest(
-                            points[i].coord.coords.as_slice(),
+                            points[i].coord.as_slice(),
                             1,
                             &kdtree::distance::squared_euclidean,
                         )
@@ -114,17 +114,11 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     let kdtree = {
         let mut kdtree = kdtree::KdTree::new(3);
         for (i, p) in points.iter().enumerate() {
-            kdtree.add(p.coord.coords, i).unwrap();
+            kdtree.add(*p.coord, i).unwrap();
         }
         kdtree
     };
     let kd_tree = KdTree::build(points.clone());
-    let kd_tree_nalgebra = KdTree::build(
-        points
-            .iter()
-            .map(|point| nalgebra::Point3::from(point.coord))
-            .collect::<Vec<_>>(),
-    );
     for k in &[1, 5, 10, 20, 50] {
         group.bench_with_input(BenchmarkId::new("kd_tree", k), k, |b, k| {
             b.iter_with_setup(
@@ -135,15 +129,6 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
                 },
             );
         });
-        group.bench_with_input(BenchmarkId::new("kd_tree_nalgebra", k), k, |b, k| {
-            b.iter_with_setup(
-                || rng.gen::<usize>() % N,
-                |i| {
-                    let nearests = kd_tree_nalgebra.nearests(&kd_tree_nalgebra[i], *k);
-                    assert_eq!(*nearests[0].item, kd_tree_nalgebra[i]);
-                },
-            );
-        });
         group.bench_with_input(BenchmarkId::new("kdtree", k), k, |b, k| {
             b.iter_with_setup(
                 || rng.gen::<usize>() % N,
@@ -151,7 +136,7 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
                     assert_eq!(
                         *kdtree
                             .nearest(
-                                points[i].coord.coords.as_slice(),
+                                points[i].coord.as_slice(),
                                 *k,
                                 &kdtree::distance::squared_euclidean
                             )
@@ -207,7 +192,7 @@ fn bench_kdtree_within_radius(c: &mut Criterion) {
     let kdtree = {
         let mut kdtree = kdtree::KdTree::new(3);
         for (i, p) in points.iter().enumerate() {
-            kdtree.add(p.coord.coords, i).unwrap();
+            kdtree.add(*p.coord, i).unwrap();
         }
         kdtree
     };
@@ -225,7 +210,7 @@ fn bench_kdtree_within_radius(c: &mut Criterion) {
                 |i| {
                     kdtree
                         .within(
-                            points[i].coord.coords.as_slice(),
+                            points[i].coord.as_slice(),
                             *radius * *radius,
                             &kdtree::distance::squared_euclidean,
                         )
@@ -247,7 +232,7 @@ criterion_main!(benches);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TestItem<T: Scalar> {
-    coord: Point3<T>,
+    coord: UnitVector3<T>,
 }
 impl<
         T: nalgebra::Scalar
@@ -267,20 +252,22 @@ impl<
         self.coord[k]
     }
     fn distance_metric(&self, other: &Self) -> Self::Scalar {
-        let diff = self.coord - other.coord;
+        let diff = *self.coord - *other.coord;
         diff.dot(&diff)
     }
 }
 impl fux_kdtree::kdtree::KdtreePointTrait for TestItem<f64> {
     fn dims(&self) -> &[f64] {
-        self.coord.coords.as_slice()
+        self.coord.as_slice()
     }
 }
 
 fn gen_points3d(count: usize) -> Vec<TestItem<f64>> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    std::iter::repeat_with(move || TestItem { coord: rng.gen() })
-        .take(count)
-        .collect()
+    std::iter::repeat_with(move || TestItem {
+        coord: UnitVector3::new_normalize(rng.gen()),
+    })
+    .take(count)
+    .collect()
 }
