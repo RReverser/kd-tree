@@ -2,10 +2,8 @@ use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
 use num_traits::Signed;
-use num_traits::Zero;
 use rayon::prelude::*;
 use std::hint::assert_unchecked;
-use std::iter::zip;
 use std::ops::DerefMut;
 
 pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
