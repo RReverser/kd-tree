@@ -69,10 +69,10 @@ pub trait KdPoint: Send + Sync {
     type Scalar: Signed + Copy + PartialOrd + Send + Sync;
     const DIM: usize;
     fn at(&self, i: usize) -> Self::Scalar;
-    // Conversion from actual distance to the metric used for comparisons.
-    // By default a squared distance.
-    fn from_distance_to_metric(distance: Self::Scalar) -> Self::Scalar {
-        distance * distance
+    // Distance metric between given hyperplane coordinates.
+    fn distance_metric_between(coord1: Self::Scalar, coord2: Self::Scalar) -> Self::Scalar {
+        let diff = coord1 - coord2;
+        diff * diff
     }
     // Distance metric - doesn't need to be an actual distance, as long
     // as it preserves the order.
@@ -177,7 +177,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
 
     /// search points within k-dimensional sphere
     pub fn within_radius(&self, query: &T, radius: T::Scalar) -> Vec<&T> {
-        let radius_metric = T::from_distance_to_metric(radius);
+        let radius_metric = T::distance_metric_between(zero(), radius);
         let mut results = Vec::new();
         let results_mut = &mut results;
         kd_within_by_cmp(

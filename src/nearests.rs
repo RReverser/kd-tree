@@ -1,7 +1,6 @@
 use crate::split_at_mid::split_at_mid;
 use crate::{ItemAndDistance, KdPoint};
 use arrayvec::ArrayVec;
-use num_traits::Signed;
 use std::hint::assert_unchecked;
 use std::ops::DerefMut;
 
@@ -65,8 +64,9 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 unsafe {
                     assert_unchecked(axis < T::DIM);
                 }
-                let diff = query.at(axis) - item.at(axis);
-                if diff.is_positive() {
+                let query_coord = query.at(axis);
+                let item_coord = item.at(axis);
+                if query_coord > item_coord {
                     std::mem::swap(&mut before, &mut after);
                 }
                 axis += 1;
@@ -83,7 +83,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 );
                 if !after.is_empty()
                     && nearests.get(nearests.capacity() - 1).map_or(true, |max| {
-                        T::from_distance_to_metric(diff) < max.distance_metric
+                        T::distance_metric_between(query_coord, item_coord) <= max.distance_metric
                     })
                 {
                     recurse(nearests, after, query, axis);
