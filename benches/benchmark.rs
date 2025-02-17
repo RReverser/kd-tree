@@ -7,7 +7,7 @@ use rand::Rng;
 use std::sync::LazyLock;
 
 static POINTS: LazyLock<Vec<TestItem<f64>>> = LazyLock::new(|| {
-    const N: usize = 10_000_000;
+    const N: usize = 2_000_000;
 
     let mut rng = rand::thread_rng();
     std::iter::repeat_with(move || TestItem {
