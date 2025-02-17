@@ -21,8 +21,6 @@ nalgebra = "0.33.2"
 [dev-dependencies]
 rand = "0.8.5"
 criterion = "0.5.1"
-fux_kdtree = { version = "0.2.0", package = "fux_kdtree" }
-kdtree = "0.7.0"
 nalgebra = { version = "0.33.2", features = ["rand"] }
 iai-callgrind = "0.14.0"
 
