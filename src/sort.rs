@@ -8,19 +8,7 @@ pub struct OrdHelper<T: PartialOrd>(pub T);
 impl<T: PartialOrd> Ord for OrdHelper<T> {
     #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.partial_cmp(&other.0).unwrap_or_else(
-            #[cold]
-            move || {
-                // Couldn't compare values.
-                // One of them is NaN-like and should go to the end.
-                #[allow(clippy::eq_op)]
-                match (self.0 != self.0, other.0 != other.0) {
-                    (true, false) => Ordering::Greater,
-                    (false, true) => Ordering::Less,
-                    _ => Ordering::Equal,
-                }
-            },
-        )
+        unsafe { self.0.partial_cmp(&other.0).unwrap_unchecked() }
     }
 }
 
@@ -44,7 +32,10 @@ pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
             let index = items.len() / 2;
             let (before, _, after) =
                 items.select_nth_unstable_by_key(index, move |item| OrdHelper(item.at(axis)));
-            axis = (axis + 1) % T::DIM;
+            axis += 1;
+            if axis == T::DIM {
+                axis = 0;
+            }
             rayon::join(move || recurse(before, axis), move || recurse(after, axis));
         }
     }
