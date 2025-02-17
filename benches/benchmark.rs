@@ -5,10 +5,9 @@ use kd_tree::*;
 use nalgebra::{Scalar, UnitVector3};
 
 fn bench_kdtree_construction(c: &mut Criterion) {
-    let mut group = c.benchmark_group("construct");
     for log10n in &[2, 3, 4] {
-        group.bench_with_input(
-            BenchmarkId::new("kd_tree (f64)", log10n),
+        c.bench_with_input(
+            BenchmarkId::new("construct", log10n),
             log10n,
             |b, log10n| {
                 let points = gen_points3d(10usize.pow(*log10n));
@@ -21,82 +20,27 @@ fn bench_kdtree_construction(c: &mut Criterion) {
 fn bench_kdtree_nearest_search(c: &mut Criterion) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let mut group = c.benchmark_group("nearest");
     for log10n in &[2, 3, 4] {
-        group.bench_with_input(
-            BenchmarkId::new("kd_tree (f64)", log10n),
-            log10n,
-            |b, log10n| {
-                let kdtree = KdTree::build(gen_points3d(10usize.pow(*log10n)));
-                b.iter_with_setup(
-                    || rng.gen::<usize>() % kdtree.len(),
-                    |i| kdtree.nearest(&kdtree[i]).unwrap(),
-                );
-            },
-        );
-        group.bench_with_input(
-            BenchmarkId::new("kd_tree/nearests", log10n),
-            log10n,
-            |b, log10n| {
-                let kdtree = KdTree::build(gen_points3d(10usize.pow(*log10n)));
-                b.iter_with_setup(
-                    || rng.gen::<usize>() % kdtree.len(),
-                    |i| kdtree.nearests(&kdtree[i], 1),
-                );
-            },
-        );
+        c.bench_with_input(BenchmarkId::new("nearest", log10n), log10n, |b, log10n| {
+            let kdtree = KdTree::build(gen_points3d(10usize.pow(*log10n)));
+            b.iter_with_setup(
+                || rng.gen::<usize>() % kdtree.len(),
+                |i| kdtree.nearest(&kdtree[i]).unwrap(),
+            );
+        });
     }
 }
 
 fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let mut group = c.benchmark_group("nearests");
     const N: usize = 1000000;
     let points = gen_points3d(N);
     let kd_tree = KdTree::build(points);
-    for k in &[1, 5, 10, 20, 50] {
-        group.bench_with_input(BenchmarkId::new("kd_tree", k), k, |b, k| {
-            b.iter_with_setup(
-                || rng.gen::<usize>() % N,
-                |i| {
-                    let nearests = kd_tree.nearests(&kd_tree[i], *k);
-                    assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-                },
-            );
-        });
-    }
-    group.bench_function(BenchmarkId::new("kd_tree with arr", 1), |b| {
-        b.iter_with_setup(
-            || rng.gen::<usize>() % kd_tree.len(),
-            |i| kd_tree.nearests_arr::<1>(&kd_tree[i]),
-        );
-    });
-    group.bench_function(BenchmarkId::new("kd_tree with arr", 5), |b| {
+    c.bench_with_input(BenchmarkId::new("nearests", 4), &4, |b, _k| {
         b.iter_with_setup(
             || rng.gen::<usize>() % kd_tree.len(),
             |i| kd_tree.nearests_arr::<5>(&kd_tree[i]),
-        );
-    });
-    group.bench_function(BenchmarkId::new("kd_tree with arr", 10), |b| {
-        b.iter_with_setup(
-            || rng.gen::<usize>() % kd_tree.len(),
-            |i| kd_tree.nearests_arr::<10>(&kd_tree[i]),
-        );
-    });
-    group.bench_function(BenchmarkId::new("kd_tree with arr", 20), |b| {
-        b.iter_with_setup(
-            || rng.gen::<usize>() % kd_tree.len(),
-            |i| kd_tree.nearests_arr::<20>(&kd_tree[i]),
-        );
-    });
-    group.bench_function(BenchmarkId::new("kd_tree with arr", 50), |b| {
-        b.iter_with_setup(
-            || rng.gen::<usize>() % kd_tree.len(),
-            |i| {
-                let nearests = kd_tree.nearests_arr::<50>(&kd_tree[i]);
-                assert_eq!(nearests[0].item.coord, kd_tree[i].coord);
-            },
         );
     });
 }
