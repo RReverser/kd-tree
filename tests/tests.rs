@@ -44,29 +44,23 @@ fn test_nearests(
     #[strategy(point_strategy())] query: Point3<f64>,
     #[strategy(0..5_usize)] num: usize,
 ) {
-    const NUM: usize = 5;
-
     let kdtree = KdTree::build(points);
 
-    let mut found = kdtree.nearests(&query, num);
+    let found = kdtree.nearests(&query, num);
     for pair in found.windows(2) {
         assert!(pair[0].distance_metric <= pair[1].distance_metric);
     }
-    found.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p.item));
+    assert_eq!(found.len(), num.min(kdtree.len()));
+    let last_found_dist = found.last().map_or(-1.0, |p| p.distance_metric);
     let mut expected = kdtree
         .iter()
         .map(|p| ItemAndDistance {
             item: p,
             distance_metric: nalgebra::distance_squared(p, &query),
         })
-        .filter(|p| {
-            p.distance_metric
-                <= found
-                    .get(NUM - 1)
-                    .map_or(f64::INFINITY, |p| p.distance_metric)
-        })
+        .filter(|p| p.distance_metric <= last_found_dist)
         .collect::<Vec<_>>();
-    expected.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p.item));
+    expected.sort_unstable_by_key(|p| OrderedFloat(p.distance_metric));
     prop_assert_eq!(found, expected);
 }
 
