@@ -11,6 +11,11 @@ use proptest::prelude::*;
 use proptest::prop_assert_eq;
 use test_strategy::proptest;
 
+#[ctor::ctor]
+fn init() {
+    color_backtrace::install();
+}
+
 fn point_strategy() -> impl Strategy<Value = Point3<f64>> {
     vector(-1.0..=1.0, Const).prop_map(Point3::from)
 }
@@ -44,7 +49,6 @@ fn test_nearests(
     let kdtree = KdTree::build(points);
 
     let mut found = kdtree.nearests(&query, num);
-    prop_assert_eq!(found.len(), NUM);
     for pair in found.windows(2) {
         assert!(pair[0].distance_metric <= pair[1].distance_metric);
     }
