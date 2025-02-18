@@ -57,7 +57,7 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
 fn bench_kdtree_within_radius(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
 
-    for radius in &[0.05, 0.1, 0.2, 0.4] {
+    for radius in &[0.1, 1.0] {
         c.bench_with_input(
             BenchmarkId::new("within_radius", radius),
             radius,
