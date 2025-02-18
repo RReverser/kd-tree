@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0d54e37655483eb504f51c2adb9855a5db2e05ee4c16c13bc1c8e9ea58b342c0 # shrinks to input = _TestNearestsArgs { points: [], query: [0.0, 0.0, 0.0], num: 0 }
+cc 5ef936c11e1d91ca5614c3c059f69d9602d36f9d0d4426e5bea5b1d5e47bbafd # shrinks to input = _TestNearestArgs { points: [], query: [0.0, 0.0, 0.0] }
+cc 00e09ecfc345b3f89eb5db8c01204bd70108c6186c172bad0650f14d628bffd4 # shrinks to input = _TestWithinRadiusArgs { points: [[0.0, 0.0, 0.0]], query: [0.0, 0.0, 0.0], radius: -7.979417212635574e244 }
