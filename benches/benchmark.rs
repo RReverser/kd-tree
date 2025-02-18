@@ -2,11 +2,11 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use kd_tree::*;
-use nalgebra::{Scalar, UnitVector3};
+use nalgebra::UnitVector3;
 use rand::Rng;
 use std::sync::LazyLock;
 
-static POINTS: LazyLock<Vec<TestItem<f64>>> = LazyLock::new(|| {
+static POINTS: LazyLock<Vec<TestItem>> = LazyLock::new(|| {
     const N: usize = 2_000_000;
 
     let mut rng = rand::thread_rng();
@@ -17,7 +17,7 @@ static POINTS: LazyLock<Vec<TestItem<f64>>> = LazyLock::new(|| {
     .collect()
 });
 
-static KD_TREE: LazyLock<KdTree<TestItem<f64>, Vec<TestItem<f64>>>> =
+static KD_TREE: LazyLock<KdTree<TestItem, Vec<TestItem>>> =
     LazyLock::new(|| KdTree::build(POINTS.clone()));
 
 fn bench_kdtree_construction(c: &mut Criterion) {
@@ -83,10 +83,10 @@ criterion_group!(
 criterion_main!(benches);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct TestItem<T: Scalar> {
-    coord: UnitVector3<T>,
+struct TestItem {
+    coord: UnitVector3<f64>,
 }
-impl KdPoint for TestItem<f64> {
+impl KdPoint for TestItem {
     type Scalar = f64;
     const DIM: usize = 3;
     fn at(&self, k: usize) -> f64 {
