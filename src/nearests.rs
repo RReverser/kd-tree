@@ -92,7 +92,9 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         }
     }
 
-    recurse(nearests, kdtree, query, 0);
+    if nearests.capacity() != 0 {
+        recurse(nearests, kdtree, query, 0);
+    }
 }
 
 fn insert_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(

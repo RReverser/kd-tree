@@ -4,6 +4,7 @@ use kd_tree::*;
 
 use nalgebra::Const;
 use nalgebra::{proptest::vector, Point3};
+use ordered_float::OrderedFloat;
 use prop::array::uniform2;
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -21,11 +22,14 @@ fn test_nearest(
 ) {
     let kdtree = KdTree::build(points);
 
-    let found = kdtree.nearest(&query).unwrap().item;
+    let found = kdtree.nearest(&query);
     let expected = kdtree
         .iter()
-        .min_by_key(|p| ordered_float::OrderedFloat(nalgebra::distance_squared(p, &query)))
-        .unwrap();
+        .map(|p| ItemAndDistance {
+            item: p,
+            distance_metric: nalgebra::distance_squared(p, &query),
+        })
+        .min_by_key(|p| OrderedFloat(p.distance_metric));
     prop_assert_eq!(found, expected);
 }
 
@@ -44,7 +48,7 @@ fn test_nearests(
     for pair in found.windows(2) {
         assert!(pair[0].distance_metric <= pair[1].distance_metric);
     }
-    found.sort_unstable_by_key(|p| std::ptr::from_ref(p.item));
+    found.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p.item));
     let mut expected = kdtree
         .iter()
         .map(|p| ItemAndDistance {
@@ -53,7 +57,7 @@ fn test_nearests(
         })
         .filter(|p| p.distance_metric <= found[NUM - 1].distance_metric)
         .collect::<Vec<_>>();
-    expected.sort_unstable_by_key(|p| std::ptr::from_ref(p.item));
+    expected.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p.item));
     prop_assert_eq!(found, expected);
 }
 
@@ -71,7 +75,7 @@ fn test_within(
 
     let kdtree = KdTree::build(points);
     let mut found = kdtree.within(p.each_ref());
-    found.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    found.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p));
     let mut expected = kdtree
         .iter()
         .filter(|f| {
@@ -80,7 +84,7 @@ fn test_within(
                 .all(|(f, (p1, p2))| (p1..=p2).contains(&f))
         })
         .collect::<Vec<_>>();
-    expected.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    expected.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p));
     prop_assert_eq!(found, expected);
 }
 
@@ -93,11 +97,11 @@ fn test_within_radius(
     let kdtree = KdTree::build(points);
 
     let mut found = kdtree.within_radius(&query, radius);
-    found.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    found.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p));
     let mut expected = kdtree
         .iter()
         .filter(|p| nalgebra::distance(p, &query) < radius)
         .collect::<Vec<_>>();
-    expected.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    expected.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p));
     prop_assert_eq!(found, expected);
 }
