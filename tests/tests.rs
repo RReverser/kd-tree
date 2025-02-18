@@ -59,7 +59,12 @@ fn test_nearests(
             item: p,
             distance_metric: nalgebra::distance_squared(p, &query),
         })
-        .filter(|p| p.distance_metric <= found[NUM - 1].distance_metric)
+        .filter(|p| {
+            p.distance_metric
+                <= found
+                    .get(NUM - 1)
+                    .map_or(f64::INFINITY, |p| p.distance_metric)
+        })
         .collect::<Vec<_>>();
     expected.sort_unstable_by_key(|p| std::ptr::from_ref::<Point3<f64>>(p.item));
     prop_assert_eq!(found, expected);
