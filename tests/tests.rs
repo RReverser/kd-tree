@@ -39,16 +39,22 @@ fn test_nearests(
 
     let kdtree = KdTree::build(points);
 
-    let found = kdtree.nearests(&query, num);
+    let mut found = kdtree.nearests(&query, num);
     prop_assert_eq!(found.len(), NUM);
     for pair in found.windows(2) {
         assert!(pair[0].distance_metric <= pair[1].distance_metric);
     }
-    let count = kdtree
+    found.sort_unstable_by_key(|p| std::ptr::from_ref(p.item));
+    let mut expected = kdtree
         .iter()
-        .filter(|p| nalgebra::distance_squared(p, &query) <= found[NUM - 1].distance_metric)
-        .count();
-    prop_assert_eq!(count, NUM);
+        .map(|p| ItemAndDistance {
+            item: p,
+            distance_metric: nalgebra::distance_squared(p, &query),
+        })
+        .filter(|p| p.distance_metric <= found[NUM - 1].distance_metric)
+        .collect::<Vec<_>>();
+    expected.sort_unstable_by_key(|p| std::ptr::from_ref(p.item));
+    prop_assert_eq!(found, expected);
 }
 
 #[proptest]
@@ -64,16 +70,18 @@ fn test_within(
         .for_each(|(a, b)| std::mem::swap(a, b));
 
     let kdtree = KdTree::build(points);
-    let found = kdtree.within(p.each_ref());
-    let count = kdtree
+    let mut found = kdtree.within(p.each_ref());
+    found.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    let mut expected = kdtree
         .iter()
         .filter(|f| {
             f.iter()
                 .zip(p[0].iter().zip(p[1].iter()))
                 .all(|(f, (p1, p2))| (p1..=p2).contains(&f))
         })
-        .count();
-    prop_assert_eq!(found.len(), count);
+        .collect::<Vec<_>>();
+    expected.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    prop_assert_eq!(found, expected);
 }
 
 #[proptest]
@@ -84,10 +92,12 @@ fn test_within_radius(
 ) {
     let kdtree = KdTree::build(points);
 
-    let found = kdtree.within_radius(&query, radius);
-    let count = kdtree
+    let mut found = kdtree.within_radius(&query, radius);
+    found.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    let mut expected = kdtree
         .iter()
-        .filter(|p| nalgebra::distance_squared(p, &query) < radius.powi(2))
-        .count();
-    prop_assert_eq!(found.len(), count);
+        .filter(|p| nalgebra::distance(p, &query) < radius)
+        .collect::<Vec<_>>();
+    expected.sort_unstable_by_key(|p| std::ptr::from_ref(p));
+    prop_assert_eq!(found, expected);
 }
