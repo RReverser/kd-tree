@@ -49,8 +49,13 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
 
         b.iter_with_setup(
             || rng.gen_range(0..kd_tree.len()),
-            move |i| kd_tree.nearests_arr::<5>(&kd_tree[i]),
+            move |i| kd_tree.nearests_arr::<4>(&kd_tree[i]),
         );
+    })
+    .bench_function("nearests_all", |b| {
+        let kd_tree = &*KD_TREE;
+
+        b.iter(move || kd_tree.nearests_all::<4>())
     });
 }
 

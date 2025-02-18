@@ -31,6 +31,7 @@ mod within;
 use arrayvec::ArrayVec;
 use nearests::*;
 use num_traits::{zero, Signed};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sort::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
@@ -102,7 +103,7 @@ impl<T, V: Borrow<[T]> + BorrowMut<[T]>> std::ops::Deref for KdTree<T, V> {
     }
 }
 
-impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
+impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]> + Sync> KdTree<T, V> {
     pub fn into_inner(self) -> V {
         self.0
     }
@@ -143,6 +144,12 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]>> KdTree<T, V> {
         let mut nearests = ArrayVec::new();
         kd_nearests(&mut nearests, self, query);
         nearests
+    }
+
+    pub fn nearests_all<'a, const N: usize>(&'a self) -> Vec<ArrayVec<ItemAndDistance<'a, T>, N>> {
+        self.par_iter()
+            .map(|item| self.nearests_arr::<N>(item))
+            .collect()
     }
 
     /// Returns the nearest item from the input point. Returns `None` if `self.is_empty()`.
