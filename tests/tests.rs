@@ -2,115 +2,92 @@
 #![allow(clippy::float_cmp)]
 use kd_tree::*;
 
-#[test]
-fn test_nearest() {
-    let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
-    for _ in 0..100 {
-        let query = gen3d();
-        let found = kdtree.nearest(&query).unwrap().item;
-        let expected = kdtree
-            .iter()
-            .min_by_key(|p| ordered_float::OrderedFloat(squared_distance(p, &query)))
-            .unwrap();
-        assert_eq!(found, expected);
-    }
+use nalgebra::Const;
+use nalgebra::{proptest::vector, Point3};
+use prop::array::uniform2;
+use proptest::collection::vec;
+use proptest::prelude::*;
+use proptest::prop_assert_eq;
+use test_strategy::proptest;
+
+fn point_strategy() -> impl Strategy<Value = Point3<f64>> {
+    vector(-1.0..=1.0, Const).prop_map(Point3::from)
 }
 
-#[test]
-fn test_nearests() {
-    let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
+#[proptest]
+fn test_nearest(
+    #[strategy(vec(point_strategy(), 0..1_000))] points: Vec<Point3<f64>>,
+    #[strategy(point_strategy())] query: Point3<f64>,
+) {
+    let kdtree = KdTree::build(points);
+
+    let found = kdtree.nearest(&query).unwrap().item;
+    let expected = kdtree
+        .iter()
+        .min_by_key(|p| ordered_float::OrderedFloat(nalgebra::distance_squared(p, &query)))
+        .unwrap();
+    prop_assert_eq!(found, expected);
+}
+
+#[proptest]
+fn test_nearests(
+    #[strategy(vec(point_strategy(), 0..1_000))] points: Vec<Point3<f64>>,
+    #[strategy(point_strategy())] query: Point3<f64>,
+    #[strategy(0..5_usize)] num: usize,
+) {
     const NUM: usize = 5;
-    for _ in 0..100 {
-        let query = gen3d();
-        let found = kdtree.nearests(&query, NUM);
-        assert_eq!(found.len(), NUM);
-        for i in 1..found.len() {
-            assert!(found[i - 1].distance_metric <= found[i].distance_metric);
-        }
-        let count = kdtree
-            .iter()
-            .filter(|p| squared_distance(p, &query) <= found[NUM - 1].distance_metric)
-            .count();
-        assert_eq!(count, NUM);
+
+    let kdtree = KdTree::build(points);
+
+    let found = kdtree.nearests(&query, num);
+    prop_assert_eq!(found.len(), NUM);
+    for pair in found.windows(2) {
+        assert!(pair[0].distance_metric <= pair[1].distance_metric);
     }
+    let count = kdtree
+        .iter()
+        .filter(|p| nalgebra::distance_squared(p, &query) <= found[NUM - 1].distance_metric)
+        .count();
+    prop_assert_eq!(count, NUM);
 }
 
-#[test]
-fn test_nearests_arr() {
-    let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
-    const NUM: usize = 5;
-    for _ in 0..100 {
-        let query = gen3d();
-        let found = kdtree.nearests_arr::<NUM>(&query);
-        assert_eq!(found.len(), NUM);
-        for i in 1..found.len() {
-            assert!(found[i - 1].distance_metric <= found[i].distance_metric);
-        }
-        let count = kdtree
-            .iter()
-            .filter(|p| squared_distance(p, &query) <= found[NUM - 1].distance_metric)
-            .count();
-        assert_eq!(count, NUM);
-    }
+#[proptest]
+fn test_within(
+    #[strategy(vec(point_strategy(), 0..1_000))] points: Vec<Point3<f64>>,
+    #[strategy(uniform2(point_strategy()))] mut p: [Point3<f64>; 2],
+) {
+    let [ref mut p0, ref mut p1] = &mut p;
+
+    p0.iter_mut()
+        .zip(p1.iter_mut())
+        .filter(|(a, b)| a > b)
+        .for_each(|(a, b)| std::mem::swap(a, b));
+
+    let kdtree = KdTree::build(points);
+    let found = kdtree.within(p.each_ref());
+    let count = kdtree
+        .iter()
+        .filter(|f| {
+            f.iter()
+                .zip(p[0].iter().zip(p[1].iter()))
+                .all(|(f, (p1, p2))| (p1..=p2).contains(&f))
+        })
+        .count();
+    prop_assert_eq!(found.len(), count);
 }
 
-#[test]
-fn test_within() {
-    let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
-    for _ in 0..100 {
-        let mut p1 = gen3d();
-        let mut p2 = gen3d();
-        for k in 0..3 {
-            if p1[k] > p2[k] {
-                std::mem::swap(&mut p1[k], &mut p2[k]);
-            }
-        }
-        let found = kdtree.within([&p1, &p2]);
-        let count = kdtree
-            .iter()
-            .filter(|p| (0..3).all(|k| p1[k] <= p[k] && p[k] <= p2[k]))
-            .count();
-        assert_eq!(found.len(), count);
-    }
-}
+#[proptest]
+fn test_within_radius(
+    #[strategy(vec(point_strategy(), 0..1_000))] points: Vec<Point3<f64>>,
+    #[strategy(point_strategy())] query: Point3<f64>,
+    radius: f64,
+) {
+    let kdtree = KdTree::build(points);
 
-#[test]
-fn test_within_radius() {
-    let mut gen3d = random3d_generator();
-    let kdtree = KdTree::build(vec(10000, |_| gen3d()));
-    const RADIUS: f64 = 0.1;
-    for _ in 0..100 {
-        let query = gen3d();
-        let found = kdtree.within_radius(&query, RADIUS);
-        let count = kdtree
-            .iter()
-            .filter(|p| squared_distance(p, &query) < RADIUS * RADIUS)
-            .count();
-        assert_eq!(found.len(), count);
-    }
-}
-
-fn squared_distance<T: num_traits::Num + Copy>(p1: &[T; 3], p2: &[T; 3]) -> T {
-    let dx = p1[0] - p2[0];
-    let dy = p1[1] - p2[1];
-    let dz = p1[2] - p2[2];
-    dx * dx + dy * dy + dz * dz
-}
-
-fn random3d_generator() -> impl FnMut() -> [f64; 3] {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    move || [rng.gen(), rng.gen(), rng.gen()]
-}
-
-fn vec<T>(count: usize, mut f: impl FnMut(usize) -> T) -> Vec<T> {
-    let mut items = Vec::with_capacity(count);
-    for i in 0..count {
-        items.push(f(i));
-    }
-    items
+    let found = kdtree.within_radius(&query, radius);
+    let count = kdtree
+        .iter()
+        .filter(|p| nalgebra::distance_squared(p, &query) < radius.powi(2))
+        .count();
+    prop_assert_eq!(found.len(), count);
 }
