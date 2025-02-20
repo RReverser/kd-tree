@@ -27,7 +27,7 @@ fn build_kdtree(n: usize) -> KdTree<XYZCoord, Vec<XYZCoord>> {
 #[bench::large(1_000_000)]
 fn knn_graph(points: KdTree<XYZCoord, Vec<XYZCoord>>) {
     points.par_iter().for_each(|point| {
-        black_box(points.nearests_arr::<4>(point));
+        black_box(points.nearests::<4>(point));
     });
 }
 

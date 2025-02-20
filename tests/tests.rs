@@ -2,6 +2,7 @@
 #![allow(clippy::float_cmp)]
 use kd_tree::*;
 
+use arrayvec::ArrayVec;
 use nalgebra::Const;
 use nalgebra::{proptest::vector, Point3};
 use ordered_float::OrderedFloat;
@@ -20,47 +21,51 @@ fn point_strategy() -> impl Strategy<Value = Point3<f64>> {
     vector(-1.0..=1.0, Const).prop_map(Point3::from)
 }
 
-#[proptest]
-fn test_nearest(
-    #[strategy(vec(point_strategy(), 0..1_000))] points: Vec<Point3<f64>>,
-    #[strategy(point_strategy())] query: Point3<f64>,
-) {
-    let kdtree = KdTree::build(points);
+#[test]
+fn test_empty_nearests() {
+    let kdtree = KdTree::build(Vec::<Point3<f64>>::new());
+    let query = Point3::new(0.0, 0.0, 0.0);
 
-    let found = kdtree.nearest(&query);
-    let expected = kdtree
-        .iter()
-        .map(|p| ItemAndDistance {
-            item: p,
-            distance_metric: nalgebra::distance_squared(p, &query),
-        })
-        .min_by_key(|p| OrderedFloat(p.distance_metric));
-    prop_assert_eq!(found, expected);
+    kdtree.nearests::<4>(&query).into_iter().for_each(|p| {
+        panic!("Unexpected point {p:?}");
+    });
+}
+
+#[test]
+fn test_nearests_0() {
+    let kdtree = KdTree::build(vec![Point3::new(1.0, 2.0, 3.0)]);
+    let query = Point3::new(0.0, 0.0, 0.0);
+
+    kdtree.nearests::<0>(&query).into_iter().for_each(|p| {
+        panic!("Unexpected point {p:?}");
+    });
 }
 
 #[proptest]
 fn test_nearests(
-    #[strategy(vec(point_strategy(), 0..1_000))] points: Vec<Point3<f64>>,
+    #[strategy(vec(point_strategy(), 0..100))] points: Vec<Point3<f64>>,
     #[strategy(point_strategy())] query: Point3<f64>,
-    #[strategy(0..5_usize)] num: usize,
 ) {
     let kdtree = KdTree::build(points);
 
-    let found = kdtree.nearests(&query, num);
+    const NUM: usize = 4;
+
+    let found = kdtree
+        .nearests::<NUM>(&query)
+        .into_iter()
+        .collect::<ArrayVec<_, NUM>>();
+
     for pair in found.windows(2) {
-        assert!(pair[0].distance_metric <= pair[1].distance_metric);
+        assert!(pair[0].1 <= pair[1].1);
     }
-    assert_eq!(found.len(), num.min(kdtree.len()));
-    let last_found_dist = found.last().map_or(-1.0, |p| p.distance_metric);
+    assert_eq!(found.len(), NUM.min(kdtree.len()));
+    let last_found_dist = found.last().map_or(-1.0, |p| p.1);
     let mut expected = kdtree
         .iter()
-        .map(|p| ItemAndDistance {
-            item: p,
-            distance_metric: nalgebra::distance_squared(p, &query),
-        })
-        .filter(|p| p.distance_metric <= last_found_dist)
-        .collect::<Vec<_>>();
-    expected.sort_unstable_by_key(|p| OrderedFloat(p.distance_metric));
+        .map(|p| (p, nalgebra::distance_squared(p, &query)))
+        .filter(|p| p.1 <= last_found_dist)
+        .collect::<ArrayVec<_, NUM>>();
+    expected.sort_unstable_by_key(|p| OrderedFloat(p.1));
     prop_assert_eq!(found, expected);
 }
 

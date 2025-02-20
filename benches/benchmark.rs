@@ -28,19 +28,6 @@ fn bench_kdtree_construction(c: &mut Criterion) {
     });
 }
 
-fn bench_kdtree_nearest_search(c: &mut Criterion) {
-    let mut rng = rand::thread_rng();
-
-    c.bench_function("nearest", |b| {
-        let kdtree = &*KD_TREE;
-
-        b.iter_with_setup(
-            || rng.gen_range(0..kdtree.len()),
-            move |i| kdtree.nearest(&kdtree[i]).unwrap(),
-        );
-    });
-}
-
 fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
 
@@ -49,7 +36,7 @@ fn bench_kdtree_k_nearest_search(c: &mut Criterion) {
 
         b.iter_with_setup(
             || rng.gen_range(0..kd_tree.len()),
-            move |i| kd_tree.nearests_arr::<4>(&kd_tree[i]),
+            move |i| kd_tree.nearests::<4>(&kd_tree[i]),
         );
     })
     .bench_function("nearests_all", |b| {
@@ -81,7 +68,6 @@ fn bench_kdtree_within_radius(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_kdtree_construction,
-    bench_kdtree_nearest_search,
     bench_kdtree_k_nearest_search,
     bench_kdtree_within_radius
 );

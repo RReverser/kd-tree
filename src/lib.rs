@@ -9,14 +9,10 @@
 //!     [2.0, 3.0, 1.0],
 //! ]);
 //!
-//! // search the nearest neighbor
-//! let found = kdtree.nearest(&[3.1, 0.9, 2.1]).unwrap();
-//! assert_eq!(found.item, &[3.0, 1.0, 2.0]);
-//!
 //! // search k-nearest neighbors
-//! let found = kdtree.nearests(&[1.5, 2.5, 1.8], 2);
-//! assert_eq!(found[0].item, &[2.0, 3.0, 1.0]);
-//! assert_eq!(found[1].item, &[1.0, 2.0, 3.0]);
+//! let mut found = kdtree.nearests::<2>(&[1.5, 2.5, 1.8]).into_iter();
+//! assert_eq!(found.next().unwrap().0, &[2.0, 3.0, 1.0]);
+//! assert_eq!(found.next().unwrap().0, &[1.0, 2.0, 3.0]);
 //!
 //! // search points within a sphere
 //! let found = kdtree.within_radius(&[2.0, 1.5, 2.5], 1.5);
@@ -28,8 +24,8 @@ mod nearests;
 mod sort;
 mod split_at_mid;
 mod within;
-use arrayvec::ArrayVec;
 use nearests::*;
+use num_traits::bounds::UpperBounded;
 use num_traits::{zero, Signed};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sort::*;
@@ -64,10 +60,10 @@ use within::*;
 ///     Point3D { x: 3.0, y: 1.0, z: 2.0 },
 ///     Point3D { x: 2.0, y: 3.0, z: 1.0 },
 /// ]);
-/// assert_eq!(*kdtree.nearest(&Point3D { x: 3.1, y: 0.1, z: 2.2 }).unwrap().item, Point3D { x: 3.0, y: 1.0, z: 2.0 });
+/// assert_eq!(*kdtree.nearests::<1>(&Point3D { x: 3.1, y: 0.1, z: 2.2 }).into_iter().next().unwrap().0, Point3D { x: 3.0, y: 1.0, z: 2.0 });
 /// ```
 pub trait KdPoint: Send + Sync {
-    type Scalar: Signed + Copy + PartialOrd + Send + Sync;
+    type Scalar: Signed + Copy + PartialOrd + Send + Sync + UpperBounded;
     const DIM: usize;
     fn at(&self, i: usize) -> Self::Scalar;
     // Distance metric between given hyperplane coordinates.
@@ -84,12 +80,6 @@ pub trait KdPoint: Send + Sync {
             .map(|diff| diff * diff)
             .fold(zero(), |sum, x| sum + x)
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ItemAndDistance<'a, T: KdPoint> {
-    pub item: &'a T,
-    pub distance_metric: T::Scalar,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -112,55 +102,22 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]> + Sync> KdTree<T, V> {
     /// ```
     /// use kd_tree::KdTree;
     /// let kdtree = KdTree::build(vec![[1, 2, 3], [3, 1, 2], [2, 3, 1]]);
-    /// assert_eq!(kdtree.nearest(&[3, 1, 2]).unwrap().item, &[3, 1, 2]);
     /// ```
     pub fn build(mut points: V) -> Self {
         kd_sort_by(points.borrow_mut());
         Self(points, PhantomData)
     }
 
-    /// Returns kNN(k nearest neighbors) from the input point.
-    /// # Example
-    /// ```
-    /// let mut items: Vec<[i32; 3]> = vec![[1, 2, 3], [3, 1, 2], [2, 3, 1], [3, 2, 2]];
-    /// let kdtree = kd_tree::KdTree::build(&mut items[..]);
-    /// let nearests = kdtree.nearests(&[3, 1, 2], 2);
-    /// assert_eq!(nearests.len(), 2);
-    /// assert_eq!(nearests[0].item, &[3, 1, 2]);
-    /// assert_eq!(nearests[1].item, &[3, 2, 2]);
-    /// ```
-    pub fn nearests(&self, query: &T, num: usize) -> Vec<ItemAndDistance<T>> {
-        let mut nearests = Vec::with_capacity(num);
-        kd_nearests(&mut nearests, self, query);
-        nearests
-    }
-
     /// Same as [`Self::nearests`], but returns an ArrayVec.
     /// Will be faster for small number of points.
-    pub fn nearests_arr<'a, const N: usize>(
-        &'a self,
-        query: &T,
-    ) -> ArrayVec<ItemAndDistance<'a, T>, N> {
-        let mut nearests = ArrayVec::new();
-        kd_nearests(&mut nearests, self, query);
-        nearests
+    pub fn nearests<'a, const N: usize>(&'a self, query: &T) -> ItemsAndDistances<'a, T, N> {
+        kd_nearests(self, query)
     }
 
-    pub fn nearests_all<'a, const N: usize>(&'a self) -> Vec<ArrayVec<ItemAndDistance<'a, T>, N>> {
+    pub fn nearests_all<'a, const N: usize>(&'a self) -> Vec<ItemsAndDistances<'a, T, N>> {
         self.par_iter()
-            .map(|item| self.nearests_arr::<N>(item))
+            .map(|item| self.nearests::<N>(item))
             .collect()
-    }
-
-    /// Returns the nearest item from the input point. Returns `None` if `self.is_empty()`.
-    /// # Example
-    /// ```
-    /// let mut items: Vec<[i32; 3]> = vec![[1, 2, 3], [3, 1, 2], [2, 3, 1]];
-    /// let kdtree = kd_tree::KdTree::build(&mut items[..]);
-    /// assert_eq!(kdtree.nearest(&[3, 1, 2]).unwrap().item, &[3, 1, 2]);
-    /// ```
-    pub fn nearest(&self, query: &T) -> Option<ItemAndDistance<T>> {
-        self.nearests_arr::<1>(query).pop()
     }
 
     /// search points within a rectangular region
@@ -208,7 +165,9 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]> + Sync> KdTree<T, V> {
     }
 }
 
-impl<T: Signed + Copy + PartialOrd + Send + Sync, const D: usize> KdPoint for [T; D] {
+impl<T: Signed + Copy + PartialOrd + Send + Sync + UpperBounded, const D: usize> KdPoint
+    for [T; D]
+{
     type Scalar = T;
     const DIM: usize = D;
     fn at(&self, i: usize) -> T {
@@ -223,7 +182,8 @@ impl<
             + Copy
             + Send
             + Sync
-            + nalgebra::ComplexField<RealField = N>,
+            + nalgebra::ComplexField<RealField = N>
+            + UpperBounded,
         const D: usize,
     > KdPoint for nalgebra::Point<N, D>
 {

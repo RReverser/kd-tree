@@ -1,50 +1,52 @@
 use crate::split_at_mid::split_at_mid;
-use crate::{ItemAndDistance, KdPoint};
-use arrayvec::ArrayVec;
+use crate::KdPoint;
+use num_traits::bounds::UpperBounded;
 use std::hint::assert_unchecked;
-use std::ops::DerefMut;
 
-pub trait VecLike: DerefMut<Target = [<Self as VecLike>::Item]> {
-    type Item;
-
-    fn insert(&mut self, index: usize, value: Self::Item);
-    fn capacity(&self) -> usize;
-    fn truncate(&mut self, new_size: usize);
+pub struct ItemsAndDistances<'a, T: KdPoint, const MAX: usize> {
+    pub items: [Option<&'a T>; MAX],
+    pub distances: [T::Scalar; MAX],
 }
 
-macro_rules! impl_vec_like {
-    () => {
-        type Item = T;
-
-        fn insert(&mut self, index: usize, value: Self::Item) {
-            Self::insert(self, index, value)
+impl<'a, T: KdPoint, const N: usize> ItemsAndDistances<'a, T, N> {
+    pub fn new() -> Self {
+        Self {
+            items: [None; N],
+            distances: [T::Scalar::max_value(); N],
         }
+    }
 
-        fn capacity(&self) -> usize {
-            Self::capacity(self)
+    pub fn insert(&mut self, item: &'a T, distance_metric: T::Scalar) {
+        let i = self
+            .distances
+            .iter()
+            .rposition(|other_distance_metric| *other_distance_metric <= distance_metric)
+            .map_or(0, |i| i + 1);
+
+        if i < N {
+            self.items.copy_within(i..N - 1, i + 1);
+            self.items[i] = Some(item);
+
+            self.distances.copy_within(i..N - 1, i + 1);
+            self.distances[i] = distance_metric;
         }
+    }
 
-        fn truncate(&mut self, new_size: usize) {
-            Self::truncate(self, new_size)
-        }
-    };
+    pub fn items(&self) -> impl Iterator<Item = &'a T> {
+        self.items.into_iter().map_while(|item| item)
+    }
+
+    pub fn into_iter(&self) -> impl Iterator<Item = (&'a T, T::Scalar)> {
+        self.items().zip(self.distances)
+    }
 }
 
-impl<T> VecLike for Vec<T> {
-    impl_vec_like!();
-}
-
-impl<T, const N: usize> VecLike for ArrayVec<T, N> {
-    impl_vec_like!();
-}
-
-pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
-    nearests: &mut V,
+pub fn kd_nearests<'a, T: KdPoint, const N: usize>(
     kdtree: &'a [T],
     query: &T,
-) {
-    fn recurse<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
-        nearests: &mut V,
+) -> ItemsAndDistances<'a, T, N> {
+    fn recurse<'a, T: KdPoint, const N: usize>(
+        nearests: &mut ItemsAndDistances<'a, T, N>,
         kdtree: &'a [T],
         query: &T,
         mut axis: usize,
@@ -52,13 +54,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
         match split_at_mid(kdtree) {
             None => {}
             Some(([], item, [])) => {
-                insert_nearests(
-                    nearests,
-                    ItemAndDistance {
-                        item,
-                        distance_metric: query.distance_metric(item),
-                    },
-                );
+                nearests.insert(item, query.distance_metric(item));
             }
             Some((before, item, after)) => {
                 unsafe {
@@ -74,38 +70,20 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                     axis = 0;
                 }
                 recurse(nearests, halves[first_half], query, axis);
-                if nearests.get(nearests.capacity() - 1).map_or(false, |max| {
-                    T::distance_metric_between(query_coord, item_coord) > max.distance_metric
-                }) {
+                if T::distance_metric_between(query_coord, item_coord)
+                    > *unsafe { nearests.distances.last().unwrap_unchecked() }
+                {
                     return;
                 }
-                insert_nearests(
-                    nearests,
-                    ItemAndDistance {
-                        item,
-                        distance_metric: query.distance_metric(item),
-                    },
-                );
+                nearests.insert(item, query.distance_metric(item));
                 recurse(nearests, halves[1 - first_half], query, axis);
             }
         }
     }
 
-    if nearests.capacity() != 0 {
-        recurse(nearests, kdtree, query, 0);
+    let mut nearests = ItemsAndDistances::new();
+    if N > 0 {
+        recurse(&mut nearests, kdtree, query, 0);
     }
-}
-
-fn insert_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
-    nearests: &mut V,
-    new_item: ItemAndDistance<'a, T>,
-) {
-    let i = nearests
-        .iter()
-        .rposition(|item| item.distance_metric <= new_item.distance_metric)
-        .map_or(0, |i| i + 1);
-    if i < nearests.capacity() {
-        nearests.truncate(nearests.capacity() - 1);
-        nearests.insert(i, new_item);
-    }
+    nearests
 }
