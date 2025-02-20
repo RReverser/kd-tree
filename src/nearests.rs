@@ -60,7 +60,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                     },
                 );
             }
-            Some((mut before, item, mut after)) => {
+            Some((before, item, after)) => {
                 unsafe {
                     assert_unchecked(axis < T::DIM);
                 }
