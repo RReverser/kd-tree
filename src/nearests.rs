@@ -64,16 +64,16 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                 unsafe {
                     assert_unchecked(axis < T::DIM);
                 }
+                let halves = [before, after];
                 let query_coord = query.at(axis);
                 let item_coord = item.at(axis);
-                if query_coord > item_coord {
-                    std::mem::swap(&mut before, &mut after);
-                }
+                // Use branchless half selection.
+                let first_half = if query_coord > item_coord { 1 } else { 0 };
                 axis += 1;
                 if axis == T::DIM {
                     axis = 0;
                 }
-                recurse(nearests, before, query, axis);
+                recurse(nearests, halves[first_half], query, axis);
                 if nearests.get(nearests.capacity() - 1).map_or(false, |max| {
                     T::distance_metric_between(query_coord, item_coord) > max.distance_metric
                 }) {
@@ -86,7 +86,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                         distance_metric: query.distance_metric(item),
                     },
                 );
-                recurse(nearests, after, query, axis);
+                recurse(nearests, halves[1 - first_half], query, axis);
             }
         }
     }
