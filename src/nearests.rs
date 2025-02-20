@@ -4,8 +4,8 @@ use num_traits::bounds::UpperBounded;
 use std::hint::assert_unchecked;
 
 pub struct ItemsAndDistances<'a, T: KdPoint, const MAX: usize> {
-    pub items: [Option<&'a T>; MAX],
-    pub distances: [T::Scalar; MAX],
+    items: [Option<&'a T>; MAX],
+    distances: [T::Scalar; MAX],
 }
 
 impl<'a, T: KdPoint, const N: usize> ItemsAndDistances<'a, T, N> {
@@ -32,12 +32,23 @@ impl<'a, T: KdPoint, const N: usize> ItemsAndDistances<'a, T, N> {
         }
     }
 
-    pub fn items(&self) -> impl Iterator<Item = &'a T> {
-        self.items.into_iter().map_while(|item| item)
+    pub const fn items(&self) -> &[&'a T] {
+        let mut count = 0;
+        while count < N && self.items[count].is_some() {
+            count += 1;
+        }
+        unsafe { std::slice::from_raw_parts(self.items.as_ptr().cast(), count) }
+    }
+
+    pub const fn distances(&self) -> &[T::Scalar] {
+        &self.distances
     }
 
     pub fn into_iter(&self) -> impl Iterator<Item = (&'a T, T::Scalar)> {
-        self.items().zip(self.distances)
+        self.items
+            .into_iter()
+            .map_while(|item| item)
+            .zip(self.distances)
     }
 }
 
