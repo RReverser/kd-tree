@@ -74,6 +74,11 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                     axis = 0;
                 }
                 recurse(nearests, before, query, axis);
+                if nearests.get(nearests.capacity() - 1).map_or(false, |max| {
+                    T::distance_metric_between(query_coord, item_coord) > max.distance_metric
+                }) {
+                    return;
+                }
                 insert_nearests(
                     nearests,
                     ItemAndDistance {
@@ -81,13 +86,7 @@ pub fn kd_nearests<'a, T: KdPoint, V: VecLike<Item = ItemAndDistance<'a, T>>>(
                         distance_metric: query.distance_metric(item),
                     },
                 );
-                if !after.is_empty()
-                    && nearests.get(nearests.capacity() - 1).map_or(true, |max| {
-                        T::distance_metric_between(query_coord, item_coord) <= max.distance_metric
-                    })
-                {
-                    recurse(nearests, after, query, axis);
-                }
+                recurse(nearests, after, query, axis);
             }
         }
     }
