@@ -15,6 +15,11 @@ pub fn kd_within_by_cmp<'a, T: KdPoint>(
         compare: impl Fn(T::Scalar, usize) -> Ordering + Copy,
     ) {
         let Some((lower, item, upper)) = split_at_mid(kdtree) else {
+            for item in kdtree {
+                if (0..T::DIM).all(|i| compare(item.at(i), i) == Ordering::Equal) {
+                    on_item(item);
+                }
+            }
             return;
         };
         let mut next_axis = axis + 1;

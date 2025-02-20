@@ -1,3 +1,4 @@
+use crate::split_at_mid::split_at_mid_index;
 use crate::KdPoint;
 use std::cmp::Ordering;
 
@@ -28,16 +29,16 @@ impl<T: PartialOrd> Eq for OrdHelper<T> {}
 
 pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
     fn recurse<T: KdPoint>(items: &mut [T], mut axis: usize) {
-        if items.len() >= 2 {
-            let index = items.len() / 2;
-            let (before, _, after) =
-                items.select_nth_unstable_by_key(index, move |item| OrdHelper(item.at(axis)));
-            axis += 1;
-            if axis == T::DIM {
-                axis = 0;
-            }
-            rayon::join(move || recurse(before, axis), move || recurse(after, axis));
+        let Some(index) = split_at_mid_index(items.len()) else {
+            return;
+        };
+        let (before, _, after) =
+            items.select_nth_unstable_by_key(index, move |item| OrdHelper(item.at(axis)));
+        axis += 1;
+        if axis == T::DIM {
+            axis = 0;
         }
+        rayon::join(move || recurse(before, axis), move || recurse(after, axis));
     }
     recurse(items, 0);
 }

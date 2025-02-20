@@ -62,34 +62,33 @@ pub fn kd_nearests<'a, T: KdPoint, const N: usize>(
         query: &T,
         mut axis: usize,
     ) {
-        match split_at_mid(kdtree) {
-            None => {}
-            Some(([], item, [])) => {
+        let Some((before, item, after)) = split_at_mid(kdtree) else {
+            for item in kdtree {
                 nearests.insert(item, query.distance_metric(item));
             }
-            Some((before, item, after)) => {
-                unsafe {
-                    assert_unchecked(axis < T::DIM);
-                }
-                let halves = [before, after];
-                let query_coord = query.at(axis);
-                let item_coord = item.at(axis);
-                // Use branchless half selection.
-                let first_half = if query_coord > item_coord { 1 } else { 0 };
-                axis += 1;
-                if axis == T::DIM {
-                    axis = 0;
-                }
-                recurse(nearests, halves[first_half], query, axis);
-                if T::distance_metric_between(query_coord, item_coord)
-                    > *unsafe { nearests.distances.last().unwrap_unchecked() }
-                {
-                    return;
-                }
-                nearests.insert(item, query.distance_metric(item));
-                recurse(nearests, halves[1 - first_half], query, axis);
-            }
+            return;
+        };
+
+        unsafe {
+            assert_unchecked(axis < T::DIM);
         }
+        let query_coord = query.at(axis);
+        let item_coord = item.at(axis);
+        // Use branchless half selection.
+        let first_half = if query_coord > item_coord { 1 } else { 0 };
+        axis += 1;
+        if axis == T::DIM {
+            axis = 0;
+        }
+        let halves = [before, after];
+        recurse(nearests, halves[first_half], query, axis);
+        if T::distance_metric_between(query_coord, item_coord)
+            > *unsafe { nearests.distances.last().unwrap_unchecked() }
+        {
+            return;
+        }
+        nearests.insert(item, query.distance_metric(item));
+        recurse(nearests, halves[1 - first_half], query, axis);
     }
 
     let mut nearests = ItemsAndDistances::new();
