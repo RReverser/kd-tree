@@ -78,12 +78,12 @@ struct TestItem {
     coord: UnitVector3<f64>,
 }
 impl KdPoint for TestItem {
-    type Scalar = f64;
+    type Point = [f64; 3];
     const DIM: usize = 3;
-    fn at(&self, k: usize) -> f64 {
-        self.coord[k]
+    fn as_point(&self) -> &Self::Point {
+        &self.coord.data.0[0]
     }
-    fn distance_metric(&self, other: &Self) -> Self::Scalar {
+    fn distance_metric(&self, other: &Self) -> KdScalar<Self::Point> {
         let diff = *self.coord - *other.coord;
         diff.dot(&diff)
     }

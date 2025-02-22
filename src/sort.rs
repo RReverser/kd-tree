@@ -34,10 +34,7 @@ pub fn kd_sort_by<T: KdPoint>(items: &mut [T]) {
         };
         let (before, _, after) =
             items.select_nth_unstable_by_key(index, move |item| OrdHelper(item.at(axis)));
-        axis += 1;
-        if axis == T::DIM {
-            axis = 0;
-        }
+        axis = T::next_axis(axis);
         rayon::join(move || recurse(before, axis), move || recurse(after, axis));
     }
     recurse(items, 0);

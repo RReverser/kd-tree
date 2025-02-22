@@ -1,22 +1,22 @@
 use crate::split_at_mid::split_at_mid;
-use crate::KdPoint;
+use crate::{KdPoint, KdScalar};
 use num_traits::bounds::UpperBounded;
 use std::hint::assert_unchecked;
 
 pub struct ItemsAndDistances<'a, T: KdPoint, const MAX: usize> {
     items: [Option<&'a T>; MAX],
-    distances: [T::Scalar; MAX],
+    distances: [KdScalar<T>; MAX],
 }
 
 impl<'a, T: KdPoint, const N: usize> ItemsAndDistances<'a, T, N> {
     pub fn new() -> Self {
         Self {
             items: [None; N],
-            distances: [T::Scalar::max_value(); N],
+            distances: [UpperBounded::max_value(); N],
         }
     }
 
-    pub fn insert(&mut self, item: &'a T, distance_metric: T::Scalar) {
+    pub fn insert(&mut self, item: &'a T, distance_metric: KdScalar<T>) {
         let i = self
             .distances
             .iter()
@@ -40,11 +40,11 @@ impl<'a, T: KdPoint, const N: usize> ItemsAndDistances<'a, T, N> {
         unsafe { std::slice::from_raw_parts(self.items.as_ptr().cast(), count) }
     }
 
-    pub const fn distances(&self) -> &[T::Scalar] {
+    pub const fn distances(&self) -> &[KdScalar<T>] {
         &self.distances
     }
 
-    pub fn into_iter(&self) -> impl Iterator<Item = (&'a T, T::Scalar)> {
+    pub fn into_iter(&self) -> impl Iterator<Item = (&'a T, KdScalar<T>)> {
         self.items
             .into_iter()
             .map_while(|item| item)
@@ -76,10 +76,7 @@ pub fn kd_nearests<'a, T: KdPoint, const N: usize>(
         let item_coord = item.at(axis);
         // Use branchless half selection.
         let first_half = if query_coord > item_coord { 1 } else { 0 };
-        axis += 1;
-        if axis == T::DIM {
-            axis = 0;
-        }
+        axis = T::next_axis(axis);
         let halves = [before, after];
         recurse(nearests, halves[first_half], query, axis);
         if T::distance_metric_between(query_coord, item_coord)

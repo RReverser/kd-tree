@@ -32,6 +32,7 @@ use sort::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
 use std::marker::PhantomData;
+use std::ops::Index;
 use within::*;
 
 /// A trait to represent k-dimensional point.
@@ -63,24 +64,47 @@ use within::*;
 /// assert_eq!(*kdtree.nearests::<1>(&Point3D { x: 3.1, y: 0.1, z: 2.2 }).into_iter().next().unwrap().0, Point3D { x: 3.0, y: 1.0, z: 2.0 });
 /// ```
 pub trait KdPoint: Send + Sync {
-    type Scalar: Signed + Copy + PartialOrd + Send + Sync + UpperBounded;
+    type Point: IntoIterator<Item: Signed + Copy + PartialOrd + Send + Sync + UpperBounded>
+        + Index<usize, Output = KdScalar<Self>>
+        + Send
+        + Sync
+        + Copy;
+
     const DIM: usize;
-    fn at(&self, i: usize) -> Self::Scalar;
+
+    fn next_axis(mut axis: usize) -> usize {
+        axis += 1;
+        if axis == Self::DIM {
+            0
+        } else {
+            axis
+        }
+    }
+
+    fn as_point(&self) -> &Self::Point;
+
+    fn at(&self, k: usize) -> KdScalar<Self> {
+        self.as_point()[k]
+    }
+
     // Distance metric between given hyperplane coordinates.
-    fn distance_metric_between(coord1: Self::Scalar, coord2: Self::Scalar) -> Self::Scalar {
+    fn distance_metric_between(coord1: KdScalar<Self>, coord2: KdScalar<Self>) -> KdScalar<Self> {
         let diff = coord1 - coord2;
         diff * diff
     }
+
     // Distance metric - doesn't need to be an actual distance, as long
     // as it preserves the order.
     // By default returns a squared distance.
-    fn distance_metric(&self, other: &Self) -> Self::Scalar {
-        (0..Self::DIM)
-            .map(move |i| self.at(i) - other.at(i))
+    fn distance_metric(&self, other: &Self) -> KdScalar<Self> {
+        std::iter::zip(*self.as_point(), *other.as_point())
+            .map(|(a, b)| a - b)
             .map(|diff| diff * diff)
             .fold(zero(), |sum, x| sum + x)
     }
 }
+
+pub type KdScalar<T> = <<T as KdPoint>::Point as IntoIterator>::Item;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct KdTree<T, V>(V, PhantomData<T>);
@@ -140,7 +164,7 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]> + Sync> KdTree<T, V> {
     }
 
     /// search points within k-dimensional sphere
-    pub fn within_radius(&self, query: &T, radius: T::Scalar) -> Vec<&T> {
+    pub fn within_radius(&self, query: &T, radius: <T::Point as IntoIterator>::Item) -> Vec<&T> {
         let radius_metric = T::distance_metric_between(zero(), radius);
         let mut results = Vec::new();
         let results_mut = &mut results;
@@ -168,10 +192,11 @@ impl<T: KdPoint, V: Borrow<[T]> + BorrowMut<[T]> + Sync> KdTree<T, V> {
 impl<T: Signed + Copy + PartialOrd + Send + Sync + UpperBounded, const D: usize> KdPoint
     for [T; D]
 {
-    type Scalar = T;
+    type Point = Self;
     const DIM: usize = D;
-    fn at(&self, i: usize) -> T {
-        self[i]
+
+    fn as_point(&self) -> &Self::Point {
+        self
     }
 }
 
@@ -187,13 +212,14 @@ impl<
         const D: usize,
     > KdPoint for nalgebra::Point<N, D>
 {
-    type Scalar = N;
+    type Point = [N; D];
     const DIM: usize = D;
 
-    fn at(&self, i: usize) -> Self::Scalar {
-        self[i]
+    fn as_point(&self) -> &Self::Point {
+        &self.coords.data.0[0]
     }
-    fn distance_metric(&self, other: &Self) -> Self::Scalar {
+
+    fn distance_metric(&self, other: &Self) -> N {
         nalgebra::distance_squared(self, other)
     }
 }
