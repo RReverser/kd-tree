@@ -40,7 +40,7 @@ impl<'a, T: KdPoint, const N: usize> ItemsAndDistances<'a, T, N> {
         unsafe { std::slice::from_raw_parts(self.items.as_ptr().cast(), count) }
     }
 
-    pub const fn distances(&self) -> &[KdScalar<T>] {
+    pub const fn distances(&self) -> &[KdScalar<T>; N] {
         &self.distances
     }
 
